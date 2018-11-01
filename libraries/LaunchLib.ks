@@ -639,36 +639,73 @@ function a_Check_Target {
 
 function a_Prompt_Target {
 // prompts the player to select a target. 
-    s_Info_push("Select target: ","").
-    LOCAL correctInput TO False.
-    Terminal:Input:CLEAR.
-    UNTIL correctInput
+    DECLARE Parameter useList TO False.
+
+    If useList 
     {
-        LOCAL retPress TO False.
-        LOCAL char TO " ".
-        UNTIL retPress
-        {
-            IF Terminal:input:hasChar() {
-                SET char TO Terminal:Input:GetChar().
-            }
-            if char <> Terminal:Input:Return
-            {
-                IF HASTARGET {
-                    s_Info_ref("", TARGET:NAME).
+        LOCAL targType TO s_Choose_from_List("targettype",list("Vessel","Body","SpaceObject")).
+        LOCAL targList TO list().
+        LOCAL listString TO "".
+        LOCAL counter TO 0.
+        IF targType = 0 {
+            SET listString TO "Vessel".
+            LIST targets IN targList.
+            FOR targ in RANGE(0, targList:LENGTH) {
+                IF targList[counter]:type = "SpaceObject" {
+                    targList:REMOVE(counter).
                 } ELSE {
-                    s_Info_ref("", "No selection").
+                    SET counter TO counter + 1.
                 }
+            }
+        } ELSE IF targType = 2 {
+            SET listString TO "SpaceObject".
+            FOR targ in RANGE(0, targList:LENGTH) {
+                IF targList[counter] <> "SpaceObject" {
+                    targList:REMOVE(counter).
+                } ELSE {
+                    SET counter TO counter + 1.
+                }
+            }
+        } ELSE {
+            SET listString TO "Body".
+            LIST bodies in targList.
+        }
+        LOCAL targNum TO s_Choose_from_List(listString, targList).
+        SET TARGET TO targList[targNum].
+    }
+    ELSE
+    {
+        s_Info_push("Select target: ","").
+        LOCAL correctInput TO False.
+        Terminal:Input:CLEAR.
+        UNTIL correctInput
+        {
+            LOCAL retPress TO False.
+            LOCAL char TO " ".
+            UNTIL retPress
+            {
+                IF Terminal:input:hasChar() {
+                    SET char TO Terminal:Input:GetChar().
+                }
+                if char <> Terminal:Input:Return
+                {
+                    IF HASTARGET {
+                        s_Info_ref("", TARGET:NAME).
+                    } ELSE {
+                        s_Info_ref("", "No selection").
+                    }
+                } ELSE {
+                    SET retPress TO True.
+                }
+            }
+            IF NOT HASTARGET {
+                SET retPress TO False.
             } ELSE {
-                SET retPress TO True.
+                SET correctInput TO True.
             }
         }
-        IF NOT HASTARGET {
-            SET retPress TO False.
-        } ELSE {
-            SET correctInput TO True.
-        }
+        s_Info_pop().
     }
-    s_Info_pop().
     RETURN TARGET.
 }
 
@@ -1417,7 +1454,7 @@ function p_Launch_To_Rendevouz {
     SET targ TO a_Check_Target(targ, 1+4+8).
     UNTIL targ:TYPENAME <> "BOOLEAN" {
         IF targ:TYPENAME = "BOOLEAN" {
-            SET targ TO a_Prompt_Target().
+            SET targ TO a_Prompt_Target(True).
         }
         SET targ TO a_Check_Target(targ, 1+4+8).
     }
@@ -1489,7 +1526,7 @@ function p_Slow_Rendevouz {
     SET targ TO a_Check_Target(targ, 1+4+8).
     UNTIL targ:TYPENAME <> "BOOLEAN" {
         IF targ:TYPENAME = "BOOLEAN" {
-            SET targ TO a_Prompt_Target().
+            SET targ TO a_Prompt_Target(True).
         }
         SET targ TO a_Check_Target(targ, 1+4+8).
     }
@@ -1662,7 +1699,7 @@ function p_Direct_Rendevouz {
     SET targ TO a_Check_Target(targ, 1+4+8).
     UNTIL targ:TYPENAME <> "BOOLEAN" {
         IF targ:TYPENAME = "BOOLEAN" {
-            SET targ TO a_Prompt_Target().
+            SET targ TO a_Prompt_Target(True).
         }
         SET targ TO a_Check_Target(targ, 1+4+8).
     }
@@ -1763,7 +1800,7 @@ function p_Match_Orbit {
     SET targ TO a_Check_Target(targ, 1+8).
     UNTIL targ:TYPENAME <> "BOOLEAN" {
         IF targ:TYPENAME = "BOOLEAN" {
-            SET targ TO a_Prompt_Target().
+            SET targ TO a_Prompt_Target(True).
         }
         SET targ TO a_Check_Target(targ, 1+8).
     }
@@ -1819,7 +1856,7 @@ function p_Close_Dist {
     SET targ TO a_Check_Target(targ, 1+8).
     UNTIL targ:TYPENAME <> "BOOLEAN" {
         IF targ:TYPENAME = "BOOLEAN" {
-            SET targ TO a_Prompt_Target().
+            SET targ TO a_Prompt_Target(True).
         }
         SET targ TO a_Check_Target(targ, 1+8).
     }
@@ -1923,7 +1960,7 @@ function p_Dock {
     SET targ TO a_Check_Target(targ, 1+2+8).
     UNTIL targ:TYPENAME <> "BOOLEAN" {
         IF targ:TYPENAME = "BOOLEAN" {
-            SET targ TO a_Prompt_Target().
+            SET targ TO a_Prompt_Target(True).
         }
         SET targ TO a_Check_Target(targ, 1+2+8).
     }
