@@ -5,6 +5,9 @@
     runoncepath("libraries/LaunchLib").
     runoncepath("libraries/DeltaVLib").
     runoncepath("libraries/DockLib").
-    p_orb_burn(c_inc_change(0)).
+    LOCAL testList TO list().
+    LIST bodies in testList.
+    LOCAL char TO s_choose_from_list("Character",testList).
+    s_Log(char).
     Quit().
 }
