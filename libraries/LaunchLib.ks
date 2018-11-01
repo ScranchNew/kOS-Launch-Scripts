@@ -741,14 +741,15 @@ function c_Inc_Change {
     LOCAL nextNode TO myANDN["AN"].
     IF a_Clamp(nextNode[0] - OBT:TRUEANOMALY,180,-180) < 0 {
         SET nextNode TO myANDN["DN"].
+        SET ANnext TO False.
     }
     LOCAL myVNode TO c_Orbit_Velocity_Vector(nextNode[0]).
-    LOCAL deltTime TO c_Time_from_Mean_An(nextNode[2]-c_MeanAN()).
+    LOCAL deltTime TO c_Time_from_Mean_An(a_Clamp(nextNode[2]-c_MeanAN(),360)).
     IF mode = 0 {
         IF ANnext {
-            SET inc TO ABS(myANDN["relInc"]) - inc.
-        } ELSE {
             SET inc TO inc - ABS(myANDN["relInc"]).
+        } ELSE {
+            SET inc TO ABS(myANDN["relInc"]) - inc.
         }
     }
     RETURN c_Circ_Man(deltTime,myVNode,myVNode,inc).
