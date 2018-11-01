@@ -65,37 +65,22 @@ function s_Layout {
                 } ELSE {
                     mLog:ADD(list(mTime, NewData[key]:TOSTRING)).
                 }
-                IF mLog:LENGTH < TERMINAL:HEIGHT - Logl - 1 {
-                    UNTIL mLogL >= mLog:LENGTH {
-                        PRINT (((mLog[mLogL][0]:year-1):TOSTRING + "." + (mLog[mLogL][0]:day-1):TOSTRING + "|" + mLog[mLogL][0]:CLOCK):PADRIGHT(15)
-                                + mLog[mLogL][1]:TOSTRING:PADRIGHT(30):SUBSTRING(0,30)) AT (1,Logl + mLogL).
-                        SET mLogL TO mLogL + 1.
-                    }
-                } ELSE {
-                    LOCAL maxLogHeight TO TERMINAL:HEIGHT - Logl - 1.
-                    LOCAL LogOff TO 0.
-                    FOR i IN RANGE(mLog:LENGTH - maxLogHeight, mLog:LENGTH) {
-                        PRINT (((mLog[i][0]:year-1):TOSTRING + "." + (mLog[i][0]:day-1):TOSTRING + "|" + mLog[i][0]:CLOCK):PADRIGHT(15)
-                                + mLog[i][1]:TOSTRING:PADRIGHT(30):SUBSTRING(0,30)) AT (1,Logl + LogOff).
-                        SET LogOff TO LogOff + 1.
-                    }
-                }
+                s_PrintLog().
             }
             ELSE IF key = "Mission" {   // Change the mission name string
-                PRINT NewData[key]:TOSTRING:PADRIGHT(29):SUBSTRING(0,29) AT (Ic, Mil).
                 SET mMission TO NewData[key]:TOSTRING.
             }
             ELSE IF key = "Subprogram" {// Change the subprogram name string
-                PRINT NewData[key]:TOSTRING:PADRIGHT(29):SUBSTRING(0,29) AT (Ic, Spl).
                 SET mSubProg TO NewData[key]:TOSTRING.
             }
             ELSE IF key = "Status" OR key = "State" {// Change the program state string
-                PRINT NewData[key]:TOSTRING:PADRIGHT(29):SUBSTRING(0,29) AT (Ic, Stl).
                 SET mStatus TO NewData[key]:TOSTRING.
             }
             ELSE IF key = "Stage" {     // Change the stage infostring
-                PRINT NewData[key]:TOSTRING:PADRIGHT(14):SUBSTRING(0,14) AT (Ic2,Il-2).
                 SET mStage TO NewData[key]:TOSTRING.
+            }
+            IF key = "Mission" OR key = "Subprogram" OR key = "Status" OR key = "State" OR key = "Stage" { // Prints Mission-changes
+                s_PrintMission().
             }
             ELSE IF key = "Info" {      // pushes a new info block or updates/removes the current info block
                 LOCAL iType TO NewData[key]["Type"].
@@ -150,18 +135,87 @@ function s_Layout {
 
                 // Actually prints the information on top of the infostack
                 IF iType = "Push" OR iType = "Refresh" AND mInfo:LENGTH > 0{
-                    LOCAL Data TO mInfo:PEEK().
-                    LOCAL lCount TO 0.
-                    FOR line IN Data {
-                        PRINT line[0]:TOSTRING:PADRIGHT(14):SUBSTRING(0,14) AT (Ic ,Il + mInfoOff + lCount).
-                        PRINT line[1]:TOSTRING:PADRIGHT(14):SUBSTRING(0,14) AT (Ic2,Il + mInfoOff + lCount).
-                        SET lCount TO lCount + 1.
-                    }
+                    s_PrintInfo().
                 }
             } ELSE {RETURN False.}
         }
     } ELSE {RETURN False.}
     RETURN True.
+}
+
+function s_PrintLog {
+//Prints the newest line in the mission log or reprints the whole thing
+    DECLARE Parameter reprint TO False.
+
+    IF (DEFINED layoutDone) = False 
+    {
+        s_Layout().
+    }
+
+    IF mLog:LENGTH < TERMINAL:HEIGHT - Logl - 1 AND (reprint = False) {
+        UNTIL mLogL >= mLog:LENGTH {
+            PRINT (((mLog[mLogL][0]:year-1):TOSTRING + "." + (mLog[mLogL][0]:day-1):TOSTRING + "|" + mLog[mLogL][0]:CLOCK):PADRIGHT(15)
+                    + mLog[mLogL][1]:TOSTRING:PADRIGHT(30):SUBSTRING(0,30)) AT (1,Logl + mLogL).
+            SET mLogL TO mLogL + 1.
+        }
+    } ELSE {    //Reprints the whole log, only showing the part, that fits on screen (scrolled to the end)
+        LOCAL maxLogHeight TO TERMINAL:HEIGHT - Logl - 1.
+        LOCAL LogOff TO 0.
+        FOR i IN RANGE(MAX(mLog:LENGTH - maxLogHeight, 0), mLog:LENGTH) {
+            PRINT (((mLog[i][0]:year-1):TOSTRING + "." + (mLog[i][0]:day-1):TOSTRING + "|" + mLog[i][0]:CLOCK):PADRIGHT(15)
+                    + mLog[i][1]:TOSTRING:PADRIGHT(30):SUBSTRING(0,30)) AT (1,Logl + LogOff).
+            SET LogOff TO LogOff + 1.
+        }
+    }
+}
+
+function s_PrintMission {
+//Reprints all the mission info (Mission name, Subprogram name, Status, Stage)
+    IF (DEFINED layoutDone) = False 
+    {
+        s_Layout().
+    }
+    PRINT mMission:PADRIGHT(29):SUBSTRING(0,29) AT (Ic, Mil).
+    PRINT mSubProg:PADRIGHT(29):SUBSTRING(0,29) AT (Ic, Spl).
+    PRINT mStatus:PADRIGHT(29):SUBSTRING(0,29) AT (Ic, Stl).
+    PRINT mStage:PADRIGHT(14):SUBSTRING(0,14) AT (Ic2,Il-2).
+}
+
+function s_PrintInfo {
+//Prints the newly changed info or the whole info-stack
+    DECLARE Parameter reprint TO False.
+
+    IF reprint {
+        LOCAL reverseInfo TO stack().
+        UNTIL mInfo:LENGTH = 0 {    // Deletes all info from the stack and stores it.
+            reverseInfo:PUSH(mInfo:POP()).
+            LOCAL lCount TO 0.
+            FOR line in Trash {
+                PRINT "":PADRIGHT(14) AT (Ic ,Il + mInfoOff + lCount).
+                PRINT "":PADRIGHT(14) AT (Ic2,Il + mInfoOff + lCount).
+                SET lCount TO lCount + 1.
+            }
+            IF mInfo:LENGTH > 0 {
+                SET mInfoOff TO mInfoOff - 1 - mInfo:PEEK():LENGTH.
+            }
+        }
+
+        UNTIL reverseInfo:LENGTH = 0 {  // Pushes it back to the stack and prints it.
+            IF mInfo:LENGTH > 0 {
+                SET mInfoOff TO mInfoOff + 1 + mInfo:PEEK():LENGTH.
+            }
+            mInfo:PUSH(reverseInfo:POP()).
+            s_PrintInfo().
+        }
+    } ELSE {                            // Prints the top of the info stack.
+        LOCAL Data TO mInfo:PEEK().
+        LOCAL lCount TO 0.
+        FOR line IN Data {
+            PRINT line[0]:TOSTRING:PADRIGHT(14):SUBSTRING(0,14) AT (Ic ,Il + mInfoOff + lCount).
+            PRINT line[1]:TOSTRING:PADRIGHT(14):SUBSTRING(0,14) AT (Ic2,Il + mInfoOff + lCount).
+            SET lCount TO lCount + 1.
+        }
+    }
 }
 
 function s_Log {
@@ -173,7 +227,6 @@ function s_Log {
     {
         s_Layout().
     }
-
 
     RETURN s_Layout(lexicon("Log", text)).
 }
@@ -340,7 +393,7 @@ function a_Stage {
 
     IF (DEFINED lastStage) = False
     {
-        GLOBAL lastStage TO 0.
+        GLOBAL lastStage TO 0.  // The missiontime the last staging event happened
     }
 
     // leaves at least 2 seconds between staging actions
@@ -351,33 +404,34 @@ function a_Stage {
 
         // Stages if an engine is flamed out, one of the fuel resources is depleted or the ship is in the launch pad
 
-        LOCAL flag TO False.
+        LOCAL stageFlag TO False.
         IF AVAILABLETHRUST = 0 OR SHIP:STATUS = "Prelaunch"
         {
-            SET flag TO True.
+            SET stageFlag TO True.
         } else {
             FOR e IN eng
             {
                 IF e:flameout
                 {
-                    SET flag TO True.
+                    SET stageFlag TO True.
                     BREAK.
                 }
-            }
+            }   
+            // The fuels checked are LiquidFuel, Oxidizer and SolidFuel (Not in this order)
             IF  (STAGE:RESOURCES[0]:AMOUNT = 0 AND STAGE:RESOURCES[0]:CAPACITY > 0) OR 
                 (STAGE:RESOURCES[2]:AMOUNT = 0 AND STAGE:RESOURCES[2]:CAPACITY > 0) OR
                 (STAGE:RESOURCES[4]:AMOUNT = 0 AND STAGE:RESOURCES[4]:CAPACITY > 0) {
-                SET flag to True.
+                SET stageFlag to True.
             }
         }
 
-        IF flag
+        IF stageFlag
         {
-            IF missiontime > 1
+            IF missiontime > 1  // The launch event will not log
             {
                 s_Log("Stage " + STAGE:NUMBER).
-                s_Stage(STAGE:NUMBER-1).
             }
+            s_Stage(STAGE:NUMBER-1).
             STAGE.
             SET lastStage TO missiontime.
             RETURN True.
@@ -390,7 +444,7 @@ function a_Check_Target {
 // checks if a target fills certain criteria.
     DECLARE Parameter targ TO 0, targType TO 0.
                     // targ: 0: choose targetet vessel else set to the target
-                    // targType:0: All allowed          // you can add_ them to get combinations (1 + 2 means Vessels and Dockingports allowed)
+                    // targType:0: All allowed          // you can add_ them to get combinations (e.g.: 1 + 2 means Vessels and Dockingports allowed)
                     //          1: Vessel
                     //          2: Dockingport
                     //          4: Body
@@ -434,6 +488,7 @@ function a_Check_Target {
 
     LOCAL targParent TO targ.
 
+    // Spaghetti code to check all possibilities
     IF targ:TYPENAME = "DOCKINGPORT" AND cDoc = False {
         s_Status("Error: Target is DOCKINGPORT").
         RETURN False.
@@ -468,7 +523,6 @@ function a_Check_Target {
         s_Status("Error: Target not in same SOI").
         RETURN False.
     }
-    
     IF targ:TYPENAME <> "BODY" AND (targ:TYPENAME = "VESSEL" OR targ:SHIP:TYPENAME = "VESSEL") AND cRen {
         IF targParent:OBT:PERIAPSIS < BODY:ATM:HEIGHT  OR targParent:OBT:APOAPSIS < 0{
             s_Status("Error: Target not in orbit").
@@ -479,7 +533,7 @@ function a_Check_Target {
 }
 
 function a_Prompt_Target {
-// prompts the player to select a target
+// prompts the player to select a target. 
     s_Info_push("Select target: ","").
     LOCAL correctInput TO False.
     Terminal:Input:CLEAR.
