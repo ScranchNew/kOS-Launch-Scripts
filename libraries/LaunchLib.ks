@@ -1680,7 +1680,7 @@ function p_Slow_Rendevouz {
 }
 
 function p_Direct_Rendevouz {
-// Rendevouz the craft with a given target.
+// Rendevouz the craft with a given target.  
     DECLARE Parameter targ TO 0.
     IF (DEFINED layoutDone) = False 
     {
@@ -1730,7 +1730,7 @@ function p_Direct_Rendevouz {
     LOCAL phase_angle_per_s TO 360/targ:OBT:PERIOD - 360/OBT:PERIOD.
 
     LOCAL d_t_offset TO 0.
-    LOCAL iterations TO 5.
+    LOCAL iterations TO 8.
     For i in RANGE(0,iterations) {
         UNTIL NOT HASNODE {
             REMOVE NEXTNODE.
@@ -1792,7 +1792,7 @@ function p_Direct_Rendevouz {
         ADD inc_node.
 
         // Get the closest encounter and the phase angle at the encounter.
-        LOCAL encounters TO c_Closest_Approach(inc_node:ORBIT, targ:OBT).
+        LOCAL encounters TO c_Closest_Approach(inc_node:ORBIT, targ:OBT, 0, 360, inc_node:ORBIT:TRUEANOMALY, inc_node:ORBIT:EPOCH).
         LOCAL minDist TO encounters[0][5] * 3.
         LOCAL minEnc TO list().
         FOR enc in encounters {
@@ -1802,10 +1802,6 @@ function p_Direct_Rendevouz {
             }
         }
         LOCAL d_phi TO a_Clamp(minEnc[4] - c_Equ_TruAn(minEnc[2],inc_node:ORBIT, targ:OBT),90,-270).
-        PRINT minEnc.
-        PRINT d_phi.
-        PRINT d_phi/-phase_angle_per_s.
-        PRINT d_t_offset.
         SET d_t_offset TO d_t_offset + d_phi/-phase_angle_per_s.
 
         IF i < iterations - 1 {

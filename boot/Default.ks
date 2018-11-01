@@ -60,6 +60,8 @@ IF ADDONS:RT:AVAILABLE {
             RUNPATH(fName).
         }
         
+    } ELSE {
+        PRINT "ERROR: No Connection".
     }
 }
 
