@@ -2,7 +2,7 @@
 
 @LAZYGLOBAL OFF.
 
-DECLARE Parameter function, pars TO list().
+DECLARE Parameter function, pars TO "".
 
 cd("libraries").
 
@@ -20,15 +20,7 @@ FOR lib IN libs{
 }
 LOG "cd("  + char(34) + ".."  + char(34) + ")." TO "tempRun.ks".
 
-LOCAL fLine TO "".
-FOR par in pars{
-    SET fLine TO fLine + par:tostring + ", ".
-}
-IF pars:length > 0 {
-    SET fLine TO fLine:substring(0,fLine:length-2).
-}
-
-LOG "print " + function:tostring + "(" + fLine + ")." TO "tempRun.ks".
+LOG "print " + function:tostring + "(" + pars + ")." TO "tempRun.ks".
 
 RUNPATH("tempRun.ks").
 DELETEPATH("tempRun.ks").
