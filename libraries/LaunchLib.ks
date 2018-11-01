@@ -27,14 +27,16 @@ function s_Layout {
         GLOBAL Spl TO 5.					// Line for subprogram-name
         GLOBAL Stl TO 8.					// Line for subprogram-status
 
-        GLOBAL mLog TO list().              // All lines logged
-        GLOBAL mLogL TO 0.                  // The log line, that was last printed
-        GLOBAL mMission TO "".              // The mission name
-        GLOBAL mSubProg TO "".              // The subprogram name
-        GLOBAL mStatus TO "".               // The program status
-        GLOBAL mStage TO "".                // The current stage
-        GLOBAL mInfo TO stack().            // The display information stack
-        GLOBAL mInfoOff TO 0.               // The offset of the working information package on top of the stack
+        IF (DEFINED mLog) = False OR (NewData:haskey("reset") AND NewData["reset"]) {
+            GLOBAL mLog TO list().              // All lines logged
+            GLOBAL mLogL TO 0.                  // The log line, that was last printed
+            GLOBAL mMission TO "".              // The mission name
+            GLOBAL mSubProg TO "".              // The subprogram name
+            GLOBAL mStatus TO "".               // The program status
+            GLOBAL mStage TO "".                // The current stage
+            GLOBAL mInfo TO stack().            // The display information stack
+            GLOBAL mInfoOff TO 0.               // The offset of the working information package on top of the stack
+        }
 
         CLEARSCREEN.
         SET TERMINAL:HEIGHT TO 40.
@@ -65,7 +67,7 @@ function s_Layout {
                 } ELSE {
                     mLog:ADD(list(mTime, NewData[key]:TOSTRING)).
                 }
-                s_PrintLog().
+                s_Print_Log().
             }
             ELSE IF key = "Mission" {   // Change the mission name string
                 SET mMission TO NewData[key]:TOSTRING.
@@ -80,7 +82,7 @@ function s_Layout {
                 SET mStage TO NewData[key]:TOSTRING.
             }
             IF key = "Mission" OR key = "Subprogram" OR key = "Status" OR key = "State" OR key = "Stage" { // Prints Mission-changes
-                s_PrintMission().
+                s_Print_Mission().
             }
             ELSE IF key = "Info" {      // pushes a new info block or updates/removes the current info block
                 LOCAL iType TO NewData[key]["Type"].
@@ -135,7 +137,7 @@ function s_Layout {
 
                 // Actually prints the information on top of the infostack
                 IF iType = "Push" OR iType = "Refresh" AND mInfo:LENGTH > 0{
-                    s_PrintInfo().
+                    s_Print_Info().
                 }
             } ELSE {RETURN False.}
         }
@@ -143,7 +145,7 @@ function s_Layout {
     RETURN True.
 }
 
-function s_PrintLog {
+function s_Print_Log {
 //Prints the newest line in the mission log or reprints the whole thing
     DECLARE Parameter reprint TO False.
 
@@ -169,7 +171,110 @@ function s_PrintLog {
     }
 }
 
-function s_PrintMission {
+function s_Logspace_Clear {
+//Prints empty lines in the Log-space. Useful if you want to use that space for a temporary UI
+    FOR i IN RANGE(0,TERMINAL:HEIGHT - Logl - 1) {
+        PRINT "":PADRIGHT(45) AT (1, Logl + i).
+    }
+}
+
+function s_Choose_from_List {
+// lets you choose an item from a list using the console
+    DECLARE Parameter name, itemList.
+
+    s_Logspace_Clear().
+    PRINT "Choose one " + name + " from the list:" AT (1, Logl).
+    PRINT "Your choice: " AT (1, Logl + 2).
+
+    LOCAL inputstring TO "".
+    LOCAL correctInput TO False.
+    LOCAL choiceNum TO -1.                          // chosen item
+    LOCAL topItem TO 0.                             // item at top of the screen
+    LOCAL listSpace TO TERMINAL:HEIGHT - Logl - 9.  // Items shown at once
+
+    PRINT "Up 1: [up-key]     | Up 1 page: [page-up]    " AT (1, Logl + 5).
+    PRINT "_____________________________________________" AT (1, Logl + 6).
+    PRINT "_____________________________________________" AT (1, TERMINAL:HEIGHT - 3).
+    PRINT "Down 1: [down-key] | Down 1 page: [page-down]" AT (1, TERMINAL:HEIGHT - 2).
+
+    LOCAL pLine TO LogL + 7.
+    FOR item IN RANGE(topItem, MIN(listSpace, itemList:LENGTH)) 
+    {
+        PRINT "[" + item + "] :" AT (1,pLine).
+        PRINT itemList[item]:TOSTRING:padright(35):substring(0,35) AT (10,pLine).
+        SET pLine TO pLine + 1.
+    }
+
+    TERMINAL:Input:CLEAR().
+    UNTIL correctInput
+    {
+        LOCAL retPress TO False.
+        UNTIL retPress
+        {
+            LOCAL char TO TERMINAL:Input:GetChar().
+            if char <> TERMINAL:Input:Return
+            {
+                LOCAL moved TO False.
+                if char = TERMINAL:Input:Backspace AND inputString:LENGTH > 0      // Backspace
+                {
+                    SET inputString TO inputString:substring(0,inputString:length - 1).
+                } ELSE IF "0123456789":CONTAINS(char)           // Number
+                {
+                    SET inputString TO inputString + char.
+                } ELSE IF char = TERMINAL:Input:UPCURSORONE     // Directions
+                {
+                    SET topItem TO MAX(0, topItem - 1).
+                    SET moved TO True.
+                } ELSE IF char = TERMINAL:Input:DOWNCURSORONE
+                {
+                    SET topItem TO MIN(topItem + 1, MAX(0,  itemList:LENGTH-listSpace)).
+                    SET moved TO True.
+                } ELSE IF char = TERMINAL:Input:PAGEUPCURSOR
+                {
+                    SET topItem TO MAX(0, topItem - listSpace).
+                    SET moved TO True.
+                } ELSE IF char = TERMINAL:Input:PAGEDOWNCURSOR
+                {
+                    SET topItem TO MIN(topItem + listSpace, MAX(0,  itemList:LENGTH-listSpace)).
+                    SET moved TO True.
+                }
+                IF moved {
+                    LOCAL pLine TO LogL + 7.
+                    FOR item IN RANGE(topItem, MIN(listSpace, itemList:LENGTH)) 
+                    {
+                        PRINT "[" + item + "]" AT (1,pLine).
+                        PRINT itemList[item]:TOSTRING:padright(20):substring(0,20) AT (7,pLine).
+                        SET pLine TO pLine + 1.
+                    }
+                }
+                Print inputString:padright(20):substring(0,20) AT (10, Logl + 1).
+                LOCAL inputNum TO inputString:TONUMBER(-1).
+                IF inputNum < itemList:length AND inputNum >= 0 {
+                    PRINT itemList[floor(inputNum)]:TOSTRING:padright(20):substring(0,20) AT (10, Logl + 3).
+                } ELSE {
+                    PRINT "":padright(20):substring(0,20) AT (10, Logl + 3).
+                }
+            } ELSE {
+                SET retPress TO True.
+            }
+        }
+        SET choiceNum TO inputString:TONUMBER(-1).
+        IF choiceNum >= itemList:length OR choiceNum < 0
+        {
+            PRINT "":padright(20):substring(0,20) AT (10, Logl + 3).
+            SET inputString TO "".
+            Print inputString:padright(20):substring(0,20) AT (10, Logl + 1).
+        } ELSE {
+            SET choiceNum TO floor(choiceNum).
+            SET correctInput TO True.
+        }
+    }
+    s_Logspace_Clear().
+    s_Print_Log().
+    Return choiceNum.
+}
+
+function s_Print_Mission {
 //Reprints all the mission info (Mission name, Subprogram name, Status, Stage)
     IF (DEFINED layoutDone) = False 
     {
@@ -181,7 +286,7 @@ function s_PrintMission {
     PRINT mStage:PADRIGHT(14):SUBSTRING(0,14) AT (Ic2,Il-2).
 }
 
-function s_PrintInfo {
+function s_Print_Info {
 //Prints the newly changed info or the whole info-stack
     DECLARE Parameter reprint TO False.
 
@@ -205,7 +310,7 @@ function s_PrintInfo {
                 SET mInfoOff TO mInfoOff + 1 + mInfo:PEEK():LENGTH.
             }
             mInfo:PUSH(reverseInfo:POP()).
-            s_PrintInfo().
+            s_Print_Info().
         }
     } ELSE {                            // Prints the top of the info stack.
         LOCAL Data TO mInfo:PEEK().
