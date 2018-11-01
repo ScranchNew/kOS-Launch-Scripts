@@ -1042,6 +1042,33 @@ function c_Equ_TruAn {
     RETURN a_Clamp(phi_2 - arPe_2, 360).
 }
 
+function c_Safe_Orientation {
+// calculates an orientation where all extendable solar panels will be exposed as much as possible.
+
+    LOCAL sParts TO SHIP:PARTS.
+    LOCAL sPanels TO list().
+    FOR item IN sParts {
+        IF item:name = "largeSolarPanel" {
+            sPanels:ADD(list(item, 15.25)).
+        } ELSE IF item:name = "solarPanels3" OR item:name = "solarPanels4" {
+            sPanels:ADD(list(item, 1)).
+        }
+    }
+    LOCAL currentVector TO V(0,0,0).
+    for panel in sPanels {
+        LOCAL pVec TO panel[0]:FACING:STARVECTOR.
+        SET pVec TO (pVec*pVec:Y/ABS(pVec:Y)):VEC.
+        SET currentVector TO currentVector + panel[1]*pVec.
+    }
+    SET currentVector TO currentVector:NORMALIZED.
+    LOCAL rotVec TO VCRS(currentVector, V(0,1,0)).
+    LOCAL neededRotation TO ANGLEAXIS(VANG(currentVector, V(0,1,0)), rotVec).
+    LOCAL newFacing TO neededRotation * SHIP:FACING:VECTOR.
+    LOCAL newTop TO neededRotation * SHIP:FACING:TOPVECTOR.
+    LOCAL newDir TO LOOKDIRUP(newFacing, newTop).
+    RETURN newDir.
+}
+
 // ________________________________________________________________________________________________________________
 // p:[Program] Scripts to perform complex maneuvers.
 // ________________________________________________________________________________________________________________
@@ -1080,12 +1107,23 @@ function p_Orb_Burn {
     LOCAL LOCK acc TO AVAILABLETHRUST/MASS.
     LOCAL LOCK safeacc TO MAX(acc, 0.001).
     SAS off.
-    LOCK STEERING TO manNode:DELTAV.
 
     LOCAL burnMean TO calc_Burn_Mean(manNode:DELTAV:MAG)[0].
+
+    if manNode:ETA - burnMean - 5 > 3600 {
+        s_Status("orienting panels").
+        LOCAL safeOrientation TO c_Safe_Orientation().
+        LOCK STEERING TO safeOrientation.
+        WAIT UNTIL ((safeOrientation * -FACING):PITCH + (safeOrientation * -FACING):YAW + (safeOrientation * -FACING):ROLL) < 10.
+        a_Warp_To(manNode:ETA - burnMean - 5 - 1200).
+
+        s_Sub_Prog("p_Orb_Burn").
+    }
+    LOCK STEERING TO manNode:DELTAV.
     WAIT UNTIL (VANG(FACING:VECTOR, manNode:DELTAV) < 10) OR (manNode:ETA < burnMean + 5).
     // warp to node with TIME for turning and some tolerance
     a_Warp_To(manNode:ETA - burnMean - 5).
+
     s_Sub_Prog("p_Orb_Burn").
     WAIT UNTIL manNode:ETA < burnMean.
 
