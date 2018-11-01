@@ -14,7 +14,7 @@ function s_Layout {
     DECLARE Parameter NewData TO lexicon("clear", True).
         // NewData: lexicon with "where to write":"what to write"
 
-    IF (DEFINED layoutDone) = False OR (NewData:haskey("clear") AND NewData["clear"])
+    IF (DEFINED layoutDone) = False OR (NewData:haskey("clear") AND NewData["clear"]) OR (NewData:haskey("reset") AND NewData["reset"])
     {
         GLOBAL layoutDone TO True.          // make sure the declarations are only run once
 
@@ -880,13 +880,13 @@ function c_Inc_Change {
                     //      relative:   mode=[1]
     LOCAL myANDN TO c_AsDe_Anomaly(OBT, 0).
     LOCAL ANnext TO True.
-    LOCAL nextNode TO myANDN["AN"].
-    IF a_Clamp(nextNode[0] - OBT:TRUEANOMALY,180,-180) < 0 {
-        SET nextNode TO myANDN["DN"].
+    LOCAL next_Node TO myANDN["AN"].
+    IF a_Clamp(next_Node[0] - OBT:TRUEANOMALY,180,-180) < 0 {
+        SET next_Node TO myANDN["DN"].
         SET ANnext TO False.
     }
-    LOCAL myVNode TO c_Orbit_Velocity_Vector(nextNode[0]).
-    LOCAL deltTime TO c_Time_from_Mean_An(a_Clamp(nextNode[2]-c_MeanAN(),360)).
+    LOCAL myVNode TO c_Orbit_Velocity_Vector(next_Node[0]).
+    LOCAL deltTime TO c_Time_from_Mean_An(a_Clamp(next_Node[2]-c_MeanAN(),360)).
     IF mode = 0 {
         IF ANnext {
             SET inc TO inc - ABS(myANDN["relInc"]).
@@ -1143,7 +1143,7 @@ function c_Closest_Approach {
         }
         IF distList[i][0] < lastDist AND distList[i][0] < nextDist {
             LOCAL phiClose TO phi_min + i * delt_phi/div.
-            LOCAL rClose TO c_r_from_Tru(phiClose, orb1:ECCENTRICITY, orb1:SEMIMAJORAXIS).
+            LOCAL rClose TO c_r_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY, orb1:SEMIMAJORAXIS).
             IF rClose * delt_phi * CONSTANT:PI/(180*div) < 100 {
                 LOCAL M1 TO c_Mean_An_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY).
                 retList:ADD(list(distList[i][0], M1, phiClose + phi_start, distList[i][1], distList[i][2], rClose)).
@@ -1179,7 +1179,7 @@ function c_Equ_TruAn {
 
     LOCAL phi_2 TO arctan(sin(phi_1+arPe_1+lan_1-lan_2)/cos(phi_1+arPe_1+lan_1-lan_2)).
     IF cos(phi_1+arPe_1+lan_1-lan_2) < 0 {
-        SET phi_2 TO -phi_2 + 180.
+        SET phi_2 TO 180 + phi_2.
     }
     RETURN a_Clamp(phi_2 - arPe_2, 360).
 }
@@ -1256,7 +1256,7 @@ function p_Orb_Burn {
         s_Status("orienting panels").
         LOCAL safeOrientation TO c_Safe_Orientation().
         LOCK STEERING TO safeOrientation.
-        WAIT UNTIL ((safeOrientation * -FACING):PITCH + (safeOrientation * -FACING):YAW + (safeOrientation * -FACING):ROLL) < 10.
+        WAIT UNTIL ((safeOrientation * -FACING):PITCH^2 + (safeOrientation * -FACING):YAW^2 + (safeOrientation * -FACING):ROLL^2) < 10^2.
         a_Warp_To(manNode:ETA - burnMean - 5 - 1200).
 
         s_Sub_Prog("p_Orb_Burn").
@@ -1726,53 +1726,95 @@ function p_Direct_Rendevouz {
     LOCAL k TO targ:OBT:SEMIMAJORAXIS/OBT:SEMIMAJORAXIS.
     LOCAL goal_phase_angle TO a_Clamp(180 - 180 * SQRT((0.5+k/2)^3) / k^(3/2), 360).
 
-    LOCAL current_phase_angle TO a_Clamp(targ:OBT:TRUEANOMALY + targ:OBT:ARGUMENTOFPERIAPSIS + targ:OBT:LAN
-                                     - OBT:TRUEANOMALY - OBT:ARGUMENTOFPERIAPSIS - OBT:LAN, 360).
 
     LOCAL phase_angle_per_s TO 360/targ:OBT:PERIOD - 360/OBT:PERIOD.
 
-    LOCAL d_t_trans TO a_Clamp(current_phase_angle - goal_phase_angle, 360) /-phase_angle_per_s.
-    IF phase_angle_per_s > 0 {
-        SET d_t_trans TO a_Clamp(goal_phase_angle - current_phase_angle, 360) / phase_angle_per_s.
+    LOCAL d_t_offset TO 0.
+    LOCAL iterations TO 5.
+    For i in RANGE(0,iterations) {
+        UNTIL NOT HASNODE {
+            REMOVE NEXTNODE.
+        }
+
+        // Find roughly the right time to start the transfer
+        LOCAL current_phase_angle TO a_Clamp(targ:OBT:TRUEANOMALY + targ:OBT:ARGUMENTOFPERIAPSIS + targ:OBT:LAN
+                                     - OBT:TRUEANOMALY - OBT:ARGUMENTOFPERIAPSIS - OBT:LAN, 360).
+        LOCAL d_t_trans TO a_Clamp(current_phase_angle - goal_phase_angle, 360) /-phase_angle_per_s.
+        IF phase_angle_per_s > 0 {
+            SET d_t_trans TO a_Clamp(goal_phase_angle - current_phase_angle, 360) / phase_angle_per_s.
+        }
+        SET d_t_trans TO d_t_trans + d_t_offset.
+        LOCAL t_trans TO TIME + d_t_trans.
+
+        // Find the radius and true anomaly of the transfer point
+        LOCAL my_phi_trans TO a_Clamp(OBT:TRUEANOMALY + 360*d_t_trans/OBT:PERIOD, 360).
+        LOCAL my_r_trans TO c_r_from_Tru(my_phi_trans).
+        // Find the radius of the intercept point with the target
+        LOCAL tar_r_trans TO c_r_from_Tru(a_Clamp(targ:OBT:TRUEANOMALY + 360*d_t_trans/targ:OBT:PERIOD + 180 - goal_phase_angle,360)
+                                        ,targ:OBT:ECCENTRICITY, targ:OBT:SEMIMAJORAXIS).
+
+        // Calculate my velocity change at the transfer point
+        LOCAL my_v_0_trans TO c_Orbit_Velocity_Vector(my_phi_trans).
+        LOCAL my_v_1_trans TO c_Orb_Vel(0,my_r_trans, tar_r_trans, my_r_trans, 0).
+        LOCAL trans_node TO c_Circ_Man(d_t_trans, my_v_0_trans, list(my_v_1_trans, 0), 0).
+        ADD trans_node.
+
+        // Calculate the height, true anomaly and eccentricity of the transfer orbit at the inclination change
+        LOCAL r_inc_ch TO (my_r_trans + tar_r_trans)/2.
+        LOCAL ec_inc_ch TO ABS(tar_r_trans - my_r_trans)/(tar_r_trans + my_r_trans).
+        LOCAL phi_inc_ch TO c_Tru_from_r(r_inc_ch, ec_inc_ch, r_inc_ch).
+
+        IF dirOutwards = False AND phi_inc_ch < 180 {
+            SET phi_inc_ch TO 360 - phi_inc_ch.
+        }
+        LOCAL M_inc_ch TO c_Mean_An_from_Tru(phi_inc_ch, ec_inc_ch).
+        IF dirOutwards = False  AND M_inc_ch < 180 {
+            SET M_inc_ch TO 360 - M_inc_ch.
+        }
+
+        // Calculate the time of the inclination change
+        LOCAL d_t_inc_ch TO c_Time_from_Mean_An(a_Clamp(M_inc_ch, 180), c_Orbit_Period(r_inc_ch)).
+        SET d_t_inc_ch TO d_t_inc_ch + (t_trans - TIME):SECONDS.
+        LOCAL t_inc_ch TO d_t_inc_ch + TIME.
+
+        // Calculates the needed inclination change for a close encounter
+        LOCAL d_ang_encounter TO SIN(a_Clamp(myANDN["AN"][0] - my_phi_trans, 360))^2 * myANDN["relInc"].
+        LOCAL beta_inc_ch TO ARCTAN(TAN(d_ang_encounter)/SIN(180 - phi_inc_ch)).
+        IF a_Clamp(myANDN["AN"][0] - my_phi_trans, 360) < 180 {
+            SET beta_inc_ch TO -beta_inc_ch. 
+        }
+        IF dirOutwards = False {
+            SET beta_inc_ch TO -beta_inc_ch. 
+        }
+
+        LOCAL v_0_inc_ch TO c_Orbit_Velocity_Vector(phi_inc_ch, OBT).
+        LOCAL inc_node TO c_Circ_Man(d_t_inc_ch, v_0_inc_ch, v_0_inc_ch, beta_inc_ch).
+        ADD inc_node.
+
+        // Get the closest encounter and the phase angle at the encounter.
+        LOCAL encounters TO c_Closest_Approach(inc_node:ORBIT, targ:OBT).
+        LOCAL minDist TO encounters[0][5] * 3.
+        LOCAL minEnc TO list().
+        FOR enc in encounters {
+            IF enc[0] < minDist {
+                SET minEnc TO enc.
+                SET minDist TO enc[0].
+            }
+        }
+        LOCAL d_phi TO a_Clamp(minEnc[4] - c_Equ_TruAn(minEnc[2],inc_node:ORBIT, targ:OBT),90,-270).
+        PRINT minEnc.
+        PRINT d_phi.
+        PRINT d_phi/-phase_angle_per_s.
+        PRINT d_t_offset.
+        SET d_t_offset TO d_t_offset + d_phi/-phase_angle_per_s.
+
+        IF i < iterations - 1 {
+            REMOVE trans_node.
+            REMOVE inc_node.
+        }
     }
-
-    LOCAL my_phi_trans TO a_Clamp(OBT:TRUEANOMALY + 360*d_t_trans/OBT:PERIOD, 360).
-
-    LOCAL d_ang_encounter TO SIN(a_Clamp(myANDN["AN"][0] - my_phi_trans, 360))^2 * myANDN["relInc"].
-
-    LOCAL my_r_trans TO c_r_from_Tru(my_phi_trans).
-    LOCAL tar_r_trans TO c_r_from_Tru(a_Clamp(targ:OBT:TRUEANOMALY + 360*d_t_trans/targ:OBT:PERIOD + 180 - goal_phase_angle,360)
-                                     ,targ:OBT:ECCENTRICITY, targ:OBT:SEMIMAJORAXIS).
-
-    LOCAL my_v_0_trans TO c_Orbit_Velocity_Vector(my_phi_trans).
-    LOCAL my_v_1_trans TO c_Orb_Vel(0,my_r_trans, tar_r_trans, my_r_trans, 0).
-    LOCAL trans_node TO c_Circ_Man(d_t_trans, my_v_0_trans, list(my_v_1_trans, 0), 0).
-    p_Orb_Burn(trans_node).
-
-    s_Log("Calculating inc. change").
-    LOCAL r_inc_ch TO (my_r_trans + tar_r_trans)/2.
-    LOCAL ec_inc_ch TO ABS(tar_r_trans - my_r_trans)/(tar_r_trans + my_r_trans).
-    LOCAL phi_inc_ch TO c_Tru_from_r(r_inc_ch, ec_inc_ch, r_inc_ch).
-    IF dirOutwards = False  AND phi_inc_ch < 180{
-        SET phi_inc_ch TO 360 - phi_inc_ch.
-    }
-    LOCAL M_inc_ch TO c_Mean_An_from_Tru(phi_inc_ch, ec_inc_ch).
-    IF dirOutwards = False  AND M_inc_ch < 180{
-        SET M_inc_ch TO 360 - M_inc_ch.
-    }
-    LOCAL t_inc_ch TO c_Time_from_Mean_An(a_Clamp(M_inc_ch - c_MeanAN(),360)).
-
-    LOCAL beta_inc_ch TO ARCTAN(TAN(d_ang_encounter)/SIN(180 - phi_inc_ch)).
-    IF a_Clamp(myANDN["AN"][0] - my_phi_trans, 360) < 180 {
-        SET beta_inc_ch TO -beta_inc_ch. 
-    }
-    IF dirOutwards = False {
-        SET beta_inc_ch TO -beta_inc_ch. 
-    }
-
-    LOCAL v_0_inc_ch TO c_Orbit_Velocity_Vector(phi_inc_ch, OBT).
-    LOCAL inc_node TO c_Circ_Man(t_inc_ch, v_0_inc_ch, v_0_inc_ch, beta_inc_ch).
-    p_Orb_Burn(inc_node).
+    p_Orb_Burn(NEXTNODE).
+    p_Orb_Burn(NEXTNODE).
 
     IF targ:TYPENAME = "Vessel" {
         p_Match_Orbit().
@@ -1827,6 +1869,12 @@ function p_Match_Orbit {
     LOCAL v_0 TO c_Orbit_Velocity_Vector(minEnc[2], OBT).
     LOCAL v_1 TO c_Orbit_Velocity_Vector(minEnc[4], targ:OBT).
     LOCAL t_burn TO c_Time_from_Mean_An(a_Clamp(minEnc[1] - c_MeanAN(),360)).
+
+    IF minDist < 200 {
+        LOCAL vRel TO SQRT((v_0[0]-v_1[0])^2 + (v_0[1]-v_1[1])^2).
+        set t_burn TO t_burn - (200 - minDist)/vRel.
+    }
+
     LOCAL burnNode TO c_Circ_Man(t_burn, v_0, v_1, incChange).
     p_Orb_Burn(burnNode).
     s_Log("Orbit matched").
@@ -1878,10 +1926,10 @@ function p_Close_Dist {
 
     LOCAL LOCK acc TO MAX(AVAILABLETHRUST,0.0001)/MASS.
 
-    LOCAL transSpeed TO MIN(maxSpeed, 3*acc*SQRT(dist:MAG-100/acc)).
+    LOCAL transSpeed TO MIN(maxSpeed, 3*acc*SQRT((dist:MAG-200)/acc)).
 
     LOCAL burnTime TO transSpeed/acc.                                           // time for one start or stop burn
-    LOCAL coastTime TO (dist:MAG-100)/transSpeed - transSpeed/acc.              // time spent coasting
+    LOCAL coastTime TO (dist:MAG-200)/transSpeed - transSpeed/acc.              // time spent coasting
 
     LOCAL LOCK targVelVec TO (transSpeed + 1) * dist_raw:NORMALIZED.
     LOCAL LOCK dVelVec TO targVelVec - vel_raw.
@@ -1903,7 +1951,7 @@ function p_Close_Dist {
     LOCK THROTTLE TO 0.
     s_Info_pop().
 
-    LOCAL LOCK etaTime TO (dist:MAG-100)/transSpeed - 1/2 * transSpeed/acc.     // time until deceleration
+    LOCAL LOCK etaTime TO (dist:MAG-200)/transSpeed - 1/2 * transSpeed/acc.     // time until deceleration
 
     UNTIL etaTime < 30 {
         IF etaTime > 150 {
