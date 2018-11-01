@@ -141,6 +141,10 @@ function calc_Burn_Mean {
             BREAK.
         }
     }
-    SET burnMean TO burnMean/wholeDV.
-    return list(burnMean, burnTime).
+    IF wholeDV > 0 {
+        SET burnMean TO burnMean/wholeDV.
+        return list(burnMean, burnTime).
+    } ELSE {
+        return list(0,0).
+    }
 }
