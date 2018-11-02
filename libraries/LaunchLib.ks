@@ -941,14 +941,9 @@ function c_Orbit_Velocity_Vector {
 // calculates the radial and tangential components of the orbital velocity of an orbit at a given true anomaly
 // The radial velocity is positive in the up direction
 // The tangential velocity is always positive
-    DECLARE Parameter truAn, orbt TO OBT.
+    DECLARE Parameter truAn, _sma TO OBT:SEMIMAJORAXIS, _e TO OBT:ECCENTRICITY, _i TO OBT:INCLINATION, _mu TO OBT:BODY:MU.
             // truAn: The true anomaly at that point
             // orbt: The orbit
-
-    LOCAL _mu TO orbt:BODY:MU.
-    LOCAL _sma TO orbt:SEMIMAJORAXIS.
-    LOCAL _e TO orbt:ECCENTRICITY.
-    LOCAL _i TO orbt:INCLINATION.
 
     LOCAL _h TO SQRT(_mu * _sma * (1-_e^2)).
     LOCAL _r TO _sma * (1-_e^2) / (1 + _e * COS(truAn)).
@@ -1852,7 +1847,7 @@ function p_Direct_Rendevouz {
             SET beta_inc_ch TO -beta_inc_ch. 
         }
 
-        LOCAL v_0_inc_ch TO c_Orbit_Velocity_Vector(phi_inc_ch, OBT).
+        LOCAL v_0_inc_ch TO c_Orbit_Velocity_Vector(phi_inc_ch).
         LOCAL inc_node TO c_Circ_Man(d_t_inc_ch, v_0_inc_ch, v_0_inc_ch, -beta_inc_ch).
         ADD inc_node.
 
@@ -1927,8 +1922,8 @@ function p_Match_Orbit {
         SET incChange TO - incChange.
     }
 
-    LOCAL v_0 TO c_Orbit_Velocity_Vector(minEnc[2], OBT).
-    LOCAL v_1 TO c_Orbit_Velocity_Vector(minEnc[4], targ:OBT).
+    LOCAL v_0 TO c_Orbit_Velocity_Vector(minEnc[2]).
+    LOCAL v_1 TO c_Orbit_Velocity_Vector(minEnc[4], targ:OBT:SEMIMAJORAXIS, targ:OBT:ECCENTRICITY, targ:OBT:INCLINATION, targ:OBT:BODY).
     LOCAL t_burn TO c_Time_from_Mean_An(m_Clamp(minEnc[1] - c_MeanAN(),360)).
 
     IF minDist < 200 {
