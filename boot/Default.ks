@@ -2,6 +2,7 @@
 
 DECLARE Parameter compiler TO True, startProgram TO True.
 
+WAIT 1.
 IF ADDONS:RT:AVAILABLE {
     GLOBAL Remote TO ADDONS:RT.
     IF Remote:HASCONNECTION(SHIP) OR SHIP:STATUS = "PRELAUNCH"
