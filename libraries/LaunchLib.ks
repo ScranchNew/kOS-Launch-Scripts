@@ -730,17 +730,13 @@ function a_Warp_To {
         s_Layout().
     }
 
-    s_Info_push("Time to warp:" , "").
-
     IF mode = 0
     {
         SET step TO TIME:SECONDS + step.
     }
 
-    s_Info_ref("", (step - TIME):CLOCK).
-
     LOCAL old_Orientation TO FACING.
-    if (step - TIME):SECONDS > 3600 AND safety {
+    if (step - TIME):SECONDS > 3600 AND safety AND "SUB_ORBITAL, ORBITING, ESCAPING":CONTAINS(SHIP:STATUS) {
         s_Status("Orienting panels").
         SAS off.
         LOCAL safeOrientation TO c_Safe_Orientation().
@@ -748,12 +744,16 @@ function a_Warp_To {
         WAIT UNTIL VANG(FACING:VECTOR, safeOrientation:VECTOR) + VANG(FACING:STARVECTOR, safeOrientation:STARVECTOR) < 10.
         a_Warp_To(step - 1200, 1, 0).
         LOCK STEERING TO old_Orientation.
-        WAIT UNTIL VANG(FACING:VECTOR, old_Orientation:VECTOR) < 10.
+        WAIT UNTIL VANG(FACING:VECTOR, old_Orientation:VECTOR) + VANG(FACING:STARVECTOR, old_Orientation:STARVECTOR) < 10.
     }
+
+    s_Info_push("Time to warp:" , "").
+
+    s_Info_ref("", (step - TIME):CLOCK).
 
     KUNIVERSE:TIMEWARP:CANCELWARP.
     WAIT 1.
-    IF SHIP:STATUS = "ORBITING" OR SHIP:STATUS = "SUB_ORBITAL" OR SHIP:STATUS = "LANDED" OR SHIP:STATUS = "PRELAUNCH" OR SHIP:STATUS = "ESCAPING"
+    IF "ORBITING, SUB_ORBITAL, LANDED, PRELAUNCH, ESCAPING":CONTAINS(SHIP:STATUS)
     {
         WarpTo(step-1).
         SET KUNIVERSE:TIMEWARP:MODE TO "RAILS".
@@ -765,7 +765,7 @@ function a_Warp_To {
     UNTIL (step - TIME:SECONDS) < 120
     {
         s_Info_ref("", (step - TIME):CLOCK).
-        IF SHIP:STATUS = "ORBITING" OR SHIP:STATUS = "SUB_ORBITAL" OR SHIP:STATUS = "LANDED" OR SHIP:STATUS = "PRELAUNCH" OR SHIP:STATUS = "ESCAPING"
+        IF "ORBITING, SUB_ORBITAL, LANDED, PRELAUNCH, ESCAPING":CONTAINS(SHIP:STATUS)
         {
             WarpTo(step-1).
         SET KUNIVERSE:TIMEWARP:MODE TO "RAILS".
@@ -1265,7 +1265,8 @@ function c_MeanAN {
                     // orb: the orbit 
                     // dTime: time from now
     IF OBT:ECCENTRICITY >= 1 {
-        RETURN m_Clamp(orb:MEANANOMALYATEPOCH + SQRT((OBT:BODY:MU)/(-OBT:SEMIMAJORAXIS^3))*(TIME:SECONDS + dTime - orb:EPOCH), 360).
+        LOCAL phi TO orb:TRUEANOMALY.
+        RETURN c_Mean_An_from_Tru(phi) + SQRT((OBT:BODY:MU)/(-OBT:SEMIMAJORAXIS^3))*(dTime).
     } ELSE {
         RETURN m_Clamp(orb:MEANANOMALYATEPOCH + 360 * (TIME:SECONDS + dTime - orb:EPOCH) / orb:PERIOD, 360).
     }
@@ -1365,9 +1366,10 @@ function p_Orb_Burn {
     LOCAL burnMean TO calc_Burn_Mean(manNode:DELTAV:MAG)[0].
 
     LOCK STEERING TO manNode:DELTAV.
-    WAIT UNTIL (VANG(FACING:VECTOR, manNode:DELTAV) < 10) OR (manNode:ETA < burnMean + 5).
+    WAIT UNTIL (VANG(FACING:VECTOR, manNode:DELTAV) < 5) OR (manNode:ETA < burnMean + 5).
     // warp to node with TIME for turning and some tolerance
     a_Warp_To(manNode:ETA - burnMean - 5).
+    LOCK STEERING TO manNode:DELTAV.
 
     s_Sub_Prog("p_Orb_Burn").
     WAIT UNTIL manNode:ETA < burnMean.
@@ -2275,7 +2277,7 @@ function p_Insertion {
 
     LOCAL d_t_adjustment_burn TO 0.
     IF OBT:ECCENTRICITY >= 1 {
-        SET d_t_adjustment_burn TO c_Time_from_Mean_An(m_Clamp(c_Mean_An_from_Tru(phi_0) - c_MeanAN(), 360), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
+        SET d_t_adjustment_burn TO c_Time_from_Mean_An(c_Mean_An_from_Tru(phi_0) - c_MeanAN(), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
     } ELSE {
         SET d_t_adjustment_burn TO c_Time_from_Mean_An(m_Clamp(c_Mean_An_from_Tru(phi_0) - c_MeanAN(), 360)).
     }
@@ -2288,9 +2290,16 @@ function p_Insertion {
         SET vel_1[1] TO -vel_1[1].
     }
 
-    LOCAL inc_0 TO OBT:INCLINATION.
+    LOCAL adjustment_nodes TO c_AnDn_Anomaly(OBT,0).
+    LOCAL inc_0 TO adjustment_nodes["relInc"].
     LOCAL agpe_0 TO OBT:ARGUMENTOFPERIAPSIS.
     LOCAL inc_adjustment TO ARCTAN(SIN(inc_0)*COS(phi_0+agpe_0)/SQRT(SIN(phi_0+agpe_0)^2+COS(inc_0)^2*COS(phi_0+agpe_0)^2)).
+    IF inc_0 > 90 {
+        SET inc_adjustment TO 180 - inc_adjustment.
+    }
+    IF adjustment_nodes["DN"][0] > 180 {
+        SET inc_adjustment TO - inc_adjustment.
+    }
 
     LOCAL adjustment_burn to c_Circ_Man(d_t_adjustment_burn, vel_0, vel_1, inc_adjustment).
     s_Log("Adjusting insertion approach").
@@ -2316,21 +2325,27 @@ function p_Insertion {
     }
     SET safeAlt TO safeAlt/2.
 
-    IF insertion_node[3] < -BODY:RADIUS OR insertion_node[3] > safeAlt {
+    IF insertion_node[3] < -BODY:RADIUS OR insertion_node[3] > pe_insertion * 5 {
         LOCAL first_insertion TO c_Simple_Man(0, safeAlt).
         s_Log("Safety insertion").
         p_Orb_Burn(first_insertion).
         s_Sub_Prog("p_Insertion").
+
+        SET inc_nodes TO c_AnDn_Anomaly(OBT,0).
+        SET insertion_node TO inc_nodes["AN"].
+        SET inc_insertion TO inc_nodes["relInc"] - ABS(inc).
+        IF ABS(m_Clamp(inc_nodes["DN"][0], 180, -180)) < ABS(m_Clamp(insertion_node[0], 180, -180)) {
+            SET insertion_node TO inc_nodes["DN"].
+            SET inc_insertion TO -inc_insertion.
+        }
     }
 
     LOCAL d_t_insertion_burn TO 0.
     IF OBT:ECCENTRICITY >= 1 {
-        SET d_t_insertion_burn TO c_Time_from_Mean_An(m_Clamp(insertion_node[2] - c_MeanAN(), 360), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
+        SET d_t_insertion_burn TO c_Time_from_Mean_An(insertion_node[2] - c_MeanAN(), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
     } ELSE {
         SET d_t_insertion_burn TO c_Time_from_Mean_An(m_Clamp(insertion_node[2] - c_MeanAN(), 360)).
     }
-
-    PRINT d_t_insertion_burn.
 
     LOCAL vel_2 TO c_Orbit_Velocity_Vector(insertion_node[0]).
 
@@ -2338,6 +2353,10 @@ function p_Insertion {
     LOCAL sma_3 TO (MAX(Ap, safeAlt) + pe_insertion + 2*BODY:RADIUS)/2.
     LOCAL phi_3 TO c_Tru_from_r(insertion_node[3] + BODY:RADIUS, ecc_3, sma_3).
     LOCAL vel_3 TO c_Orbit_Velocity_Vector(phi_3, sma_3, ecc_3, BODY:MU).
+
+    IF vel_2[1] / vel_3[1] < 0 {
+        SET vel_3[1] TO -vel_3[1].
+    }
 
     LOCAL insertion_burn to c_Circ_Man(d_t_insertion_burn, vel_2, vel_3, inc_insertion/4).
     s_Log("Insertion and inc. change").
@@ -2347,7 +2366,7 @@ function p_Insertion {
 
     SET inc_nodes TO c_AnDn_Anomaly(OBT,0).
     SET insertion_node TO inc_nodes["AN"].
-    IF inc_nodes["DN"][3] > insertion_node[3] {
+    IF inc_nodes["DN"][3] > insertion_node[3] + 45 {
         SET insertion_node TO inc_nodes["DN"].
     }
     LOCAL d_t_inclination_burn TO c_Time_from_Mean_An(m_Clamp(insertion_node[2] - c_MeanAN(), 360)).
