@@ -110,10 +110,6 @@ function calc_Burn_Mean {
             // pressure: at what pressure lever the burn is performed (0 is vacuum, 1 is the Kerbal Space Center)
             // stageTime: Time alotted to each staging process
 
-    IF (DEFINED deltaVdone) = False {
-        RUNPATH("/libraries/DeltaVLib").
-    }
-
     LOCAL wholeDV TO 0.                 // sum of the full deltaV of all stages accounted for in the burn 
     LOCAL burnTime TO 0.                // time of the whole burn
     LOCAL burnMean TO 0.                // mean time of the whole burn
