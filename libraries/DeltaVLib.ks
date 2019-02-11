@@ -53,7 +53,7 @@ function parseDeltaV {
                 SET quietEng TO TRUE.
                 eng:activate.
             }
-            // This part uses how the stage number for each part is listed to get all active engines (and their thrust/isp/etc) for each stage
+            // This part uses how the stage number for each part is listed in KSP to get all active engines (and their thrust/isp/etc) for each stage
             // This also accounts for asparagus staging
 
             LOCAL maxStage TO eng:stage.
