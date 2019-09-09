@@ -521,16 +521,17 @@ function a_Stage {
                     SET stageFlag TO True.
                     BREAK.
                 }
-            }   
+            }
             // The fuels checked are LiquidFuel, Oxidizer and SolidFuel (Not in this order)
             IF  (STAGE:RESOURCES[0]:AMOUNT = 0 AND STAGE:RESOURCES[0]:CAPACITY > 0) OR 
                 (STAGE:RESOURCES[2]:AMOUNT = 0 AND STAGE:RESOURCES[2]:CAPACITY > 0) OR
-                (STAGE:RESOURCES[4]:AMOUNT = 0 AND STAGE:RESOURCES[4]:CAPACITY > 0) {
+                (STAGE:RESOURCES[4]:AMOUNT = 0 AND STAGE:RESOURCES[4]:CAPACITY > 0) 
+            {
                 SET stageFlag to True.
             }
         }
 
-        IF stageFlag
+        IF stageFlag AND (STAGE:NUMBER > 0)
         {
             IF missiontime > 1  // The launch event will not log
             {
@@ -1403,6 +1404,8 @@ function p_Launch {
             //pAlt:int	,orbit height
             //pInc:int	,orbit inclination
 
+    LOCAL allowedTWR TO 3.
+
     LOCAL incPID_ks TO list(0.04, 0.07, 0.03).
     LOCAL thrPID_ks TO list(0.001, 0.00001, 0).
 
@@ -1431,16 +1434,23 @@ function p_Launch {
     // startup procedure
     LOCAL tnow TO TIME:SECONDS.
     a_Stage().
-    LOCK THROTTLE TO (TIME:SECONDS - tnow)/5.
-    WAIT until (TIME:SECONDS - tnow > 5).
+    IF STAGE:RESOURCESLEX:haskey("SolidFuel") = False
+    {
+        LOCK THROTTLE TO (TIME:SECONDS - tnow)/5.
+        WAIT until (TIME:SECONDS - tnow > 5).
+    } ELSE {
+        LOCK THROTTLE TO (TIME:SECONDS - tnow)/1.
+        WAIT until (TIME:SECONDS - tnow > 1).
+    }
     a_Stage().
     s_Stage(STAGE:NUMBER - 1).
 
     LOCAL LOCK acc TO AVAILABLETHRUST/MASS.
     LOCAL LOCK safeAcc TO MAX(acc, 0.0001).
-    LOCAL LOCK twr TO safeacc/(BODY:MU/(BODY:RADIUS^2)).
+    LOCAL LOCK maxTWR TO safeacc/(BODY:MU/(BODY:RADIUS^2)).
+    LOCAL LOCK goalTWR TO min(maxTWR, allowedTWR).
 
-    LOCAL sheight TO BODY:ATM:HEIGHT/4.
+    LOCAL sheight TO BODY:ATM:HEIGHT/3.
     IF NOT BODY:ATM:EXISTS
     {
         SET sheight TO peAlt/5.
@@ -1455,7 +1465,7 @@ function p_Launch {
         IF Linc > 0 { SET Linc TO Linc - 180.}
     }
 
-    LOCAL LOCK Lang TO ARCTAN(sheight/(ALTITUDE * SQRT(MAX(TWR, 1)/2))).			// angle follows log(x) curve.
+    LOCAL LOCK Lang TO ARCTAN(sheight/(ALTITUDE * SQRT(MAX(goalTWR, 1)/2))).			// angle follows log(x) curve.
     LOCK STEERING TO HEADING(90-Linc,Lang).
 
     LOCAL incPIDon TO False.
@@ -1479,7 +1489,7 @@ function p_Launch {
         }
     }
     // precise burn when close to target trajectory
-    LOCAL throt TO 1.
+    LOCAL throt TO goalTWR/maxTWR.
     LOCK THROTTLE TO throt.
     LOCAL thrPID TO PIDLOOP(thrPID_ks[0], 0, thrPID_ks[2], 0, 1).
     SET thrPID:SETPOINT TO peAlt.
@@ -1493,7 +1503,7 @@ function p_Launch {
         s_Status("Gravity turn").
     }
 
-    WHEN ALTITUDE > BODY:ATM:HEIGHT * 0.7 THEN{
+    WHEN ALTITUDE > BODY:ATM:HEIGHT * 0.8 THEN{
         TOGGLE ag1.						// open fairings
         s_Log("Opening fairing").
         LOCAL timeFairing TO MISSIONTIME.
@@ -1511,7 +1521,7 @@ function p_Launch {
     UNTIL (APOAPSIS >= peAlt - 1 and SHIP:STATUS	<> "FLYING")		//autostageing and PID
     {
         a_Stage().
-        SET thrPID:KP TO thrPID_ks[0]/TWR.
+        SET thrPID:KP TO thrPID_ks[0]/goalTWR.
         SET throt TO thrPID:UPDATE(TIME:SECONDS, APOAPSIS).
         IF incPIDon
         {
@@ -1973,7 +1983,7 @@ function p_Match_Orbit {
     }
 
     LOCAL v_0 TO c_Orbit_Velocity_Vector(minEnc[2]).
-    LOCAL v_1 TO c_Orbit_Velocity_Vector(minEnc[4], targ:OBT:SEMIMAJORAXIS, targ:OBT:ECCENTRICITY, targ:OBT:BODY).
+    LOCAL v_1 TO c_Orbit_Velocity_Vector(minEnc[4], targ:OBT:SEMIMAJORAXIS, targ:OBT:ECCENTRICITY, targ:OBT:BODY:MU).
     LOCAL t_burn TO c_Time_from_Mean_An(m_Clamp(minEnc[1] - c_MeanAN(),360)).
 
     IF minDist < 200 {
