@@ -41,7 +41,7 @@ function s_Layout {
         CLEARSCREEN.
         SET TERMINAL:HEIGHT TO 40.
         SET TERMINAL:WIDTH TO 80.
-        SET TERMINAL:CHARHEIGHT TO 10.
+        SET TERMINAL:CHARHEIGHT TO 8.
 
         PRINT "Mission Log:" AT (0,0).
         PRINT "Mission:" AT (Ic-1,Mil-1).
@@ -1207,7 +1207,7 @@ function c_Closest_Approach {
 // As this can't be analytically solved it is only an approximation and can take a lot of processing power (Uses "c_Tru_An_from_Mean()" a lot).
 // I suggest raising the allowed operations per tick for kOS.
 
-    DECLARE Parameter orb1, orb2, phi_min TO 0, delt_phi TO 360, phi_start TO orb1:TRUEANOMALY, epoch_start TO TIME:SECONDS.
+    DECLARE Parameter orb1, orb2, anomalyOffset TO 0, phi_min TO 0, delt_phi TO 360, phi_start TO orb1:TRUEANOMALY, epoch_start TO TIME:SECONDS.
     // It RETURNs a list of [n]: Encounter-lists with each having:
         // [0]: The distance at Encounter
         // [1]: Mean Anomaly of orbit 1 at Encounter
@@ -1219,7 +1219,7 @@ function c_Closest_Approach {
     LOCAL div TO 8.
 
     LOCAL M1_0 TO m_Clamp(orb1:MEANANOMALYATEPOCH + (epoch_start - orb1:EPOCH) * 360/orb1:PERIOD, 360).
-    LOCAL M2_0 TO m_Clamp(orb2:MEANANOMALYATEPOCH + (epoch_start - orb2:EPOCH) * 360/orb2:PERIOD, 360).
+    LOCAL M2_0 TO m_Clamp(orb2:MEANANOMALYATEPOCH + anomalyOffset + (epoch_start - orb2:EPOCH) * 360/orb2:PERIOD, 360).
 
     LOCAL distList TO list().
     FOR i IN RANGE(0,div) {
@@ -1249,7 +1249,7 @@ function c_Closest_Approach {
                 LOCAL M_1 TO c_Mean_An_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY).
                 retList:ADD(list(distList[i][0], M_1, phiClose + phi_start, distList[i][1], distList[i][2], rClose)).
             } ELSE {
-                LOCAL subRetList TO c_Closest_Approach(orb1, orb2, phiClose - delt_phi/div, 2*delt_phi/div, phi_start, epoch_start).
+                LOCAL subRetList TO c_Closest_Approach(orb1, orb2, anomalyOffset, phiClose - delt_phi/div, 2*delt_phi/div, phi_start, epoch_start).
                 FOR Ret in subRetList {
                     retList:ADD(Ret).
                 }
@@ -1624,7 +1624,7 @@ function p_Launch_To_Rendevouz {
 
 function p_Slow_Rendevouz {
 // Rendevouz the craft with a given target.
-    DECLARE Parameter targ TO 0.
+    DECLARE Parameter targ TO 0, anomalyOffset TO 0.
     IF (DEFINED layoutDone) = False 
     {
         s_Layout().
@@ -1649,7 +1649,7 @@ function p_Slow_Rendevouz {
 
     s_Status("Calc. transfer burn").
 
-    LOCAL myANDN TO c_AnDn_Anomaly(SHIP:OBT, targ:OBT).                           // AS and DEscending node from my orbit to target orbit
+    LOCAL myANDN TO c_AnDn_Anomaly(SHIP:OBT, targ:OBT).         // AS and DEscending node from my orbit to target orbit
     LOCAL tarANDN TO c_AnDn_Anomaly(targ:OBT, SHIP:OBT).        // AS and DEscending node from target orbit to my orbit
     LOCAL relInc TO myANDN["relInc"].
 
@@ -1691,7 +1691,7 @@ function p_Slow_Rendevouz {
     LOCAL tarPhiOfNode TO c_Equ_TruAn(phiAtNode, OBT, targ:OBT).
 
     LOCAL tarMeanAnAtNode TO c_MeanAN(targ:OBT, timeToNode).
-    LOCAL tarDeltAnAtNode TO m_Clamp(tarMeanAnAtNode - tarPhiOfNode, 360).
+    LOCAL tarDeltAnAtNode TO m_Clamp(tarMeanAnAtNode + anomalyOffset - tarPhiOfNode, 360).
     LOCAL targPosStart TO tarDeltAnAtNode / 360.
     LOCAL waitMyOrbNum TO 0.
     LOCAL targPosNew TO 0.
@@ -1764,7 +1764,7 @@ function p_Slow_Rendevouz {
         SET timeToNode TO ETA:APOAPSIS + earlyIncChange * (ETA:PERIAPSIS - ETA:APOAPSIS).
 
         SET tarMeanAnAtNode TO c_MeanAN(targ:OBT, timeToNode).
-        SET tarDeltAnAtNode TO m_Clamp(tarMeanAnAtNode - tarPhiOfNode, 360).
+        SET tarDeltAnAtNode TO m_Clamp(tarMeanAnAtNode + anomalyOffset - tarPhiOfNode, 360).
         SET targPosStart TO tarDeltAnAtNode / 360.
 
         LOCAL minPosNew TO waitMyOrbNum * MIN(1, OBT:PERIOD / targ:OBT:PERIOD)*0.95 + targPosStart.
@@ -1794,13 +1794,13 @@ function p_Slow_Rendevouz {
     a_Warp_To(OBT:PERIOD*0.75).
 
     IF targ:TYPENAME = "Vessel" {
-        p_Match_Orbit().
+        p_Match_Orbit(targ, 0.05, anomalyOffset).
     }
 }
 
 function p_Direct_Rendevouz {
-// Rendevouz the craft with a given target.  
-    DECLARE Parameter targ TO 0.
+// Rendevouz the craft with a given target at a given mean anomaly in front of the target.  
+    DECLARE Parameter targ TO 0, anomalyOffset TO 0.
     IF (DEFINED layoutDone) = False 
     {
         s_Layout().
@@ -1856,7 +1856,7 @@ function p_Direct_Rendevouz {
         }
 
         // Find roughly the right time to start the transfer
-        LOCAL current_phase_angle TO m_Clamp(targ:OBT:TRUEANOMALY + targ:OBT:ARGUMENTOFPERIAPSIS + targ:OBT:LAN
+        LOCAL current_phase_angle TO m_Clamp(targ:OBT:TRUEANOMALY + anomalyOffset + targ:OBT:ARGUMENTOFPERIAPSIS + targ:OBT:LAN
                                      - OBT:TRUEANOMALY - OBT:ARGUMENTOFPERIAPSIS - OBT:LAN, 360).
         LOCAL d_t_trans TO m_Clamp(current_phase_angle - goal_phase_angle, 360) /-phase_angle_per_s.
         IF phase_angle_per_s > 0 {
@@ -1869,7 +1869,7 @@ function p_Direct_Rendevouz {
         LOCAL my_phi_trans TO m_Clamp(OBT:TRUEANOMALY + 360*d_t_trans/OBT:PERIOD, 360).
         LOCAL my_r_trans TO c_r_from_Tru(my_phi_trans).
         // Find the radius of the intercept point with the target
-        LOCAL tar_r_trans TO c_r_from_Tru(m_Clamp(targ:OBT:TRUEANOMALY + 360*d_t_trans/targ:OBT:PERIOD + 180 - goal_phase_angle,360)
+        LOCAL tar_r_trans TO c_r_from_Tru(m_Clamp(targ:OBT:TRUEANOMALY + anomalyOffset + 360*d_t_trans/targ:OBT:PERIOD + 180 - goal_phase_angle,360)
                                         ,targ:OBT:ECCENTRICITY, targ:OBT:SEMIMAJORAXIS).
 
         // Calculate my velocity change at the transfer point
@@ -1912,7 +1912,7 @@ function p_Direct_Rendevouz {
         ADD inc_node.
 
         // Get the closest encounter and the phase angle at the encounter.
-        LOCAL encounters TO c_Closest_Approach(inc_node:ORBIT, targ:OBT, 0, 360, inc_node:ORBIT:TRUEANOMALY, inc_node:ORBIT:EPOCH).
+        LOCAL encounters TO c_Closest_Approach(inc_node:ORBIT, targ:OBT, anomalyOffset, 0, 360, inc_node:ORBIT:TRUEANOMALY, inc_node:ORBIT:EPOCH).
         LOCAL minDist TO encounters[0][5] * 3.
         LOCAL minEnc TO list().
         FOR enc in encounters {
@@ -1933,13 +1933,13 @@ function p_Direct_Rendevouz {
     p_Orb_Burn(NEXTNODE).
 
     IF targ:TYPENAME = "Vessel" {
-        p_Match_Orbit().
+        p_Match_Orbit(targ, 0.05, anomalyOffset).
     }
 }
 
 function p_Match_Orbit {
 // Matches orbital velocity at the closest approach
-    DECLARE Parameter targ TO 0, maxDist TO 0.05.
+    DECLARE Parameter targ TO 0, maxDist TO 0.05, anomalyOffset TO 0.
 
     IF (DEFINED layoutDone) = False 
     {
@@ -1964,7 +1964,7 @@ function p_Match_Orbit {
     }
 
     s_Status("Get closest intersect").
-    LOCAL encounters TO c_Closest_Approach(OBT, targ:OBT).
+    LOCAL encounters TO c_Closest_Approach(OBT, targ:OBT, anomalyOffset).
     s_Log("Calculated matching maneuver").
     LOCAL minDist TO encounters[0][5] * 3.
     LOCAL minEnc TO list().
