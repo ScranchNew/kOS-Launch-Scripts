@@ -1,6 +1,11 @@
 //KOS
 //  undo the lastmost drawing by diraxesdraw
 //
+
+IF (DEFINED draws) = False {
+  SET draws TO list().
+}
+
 SET axisNum to draws[draws:length-1]:length -1.
 UNTIL axisNum < 0 {
   SET thisOne to draws[draws:length-1][axisNum].
