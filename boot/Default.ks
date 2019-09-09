@@ -81,6 +81,7 @@ function copyLibs{
             LOCAL isCompiled TO False.
 
             IF kFile:tostring:contains(".ksm"){
+                BREAK.
                 SET fname TO kFile:tostring:REMOVE(fname-4,4).
                 SET isCompiled TO True.
             } ELSE {
@@ -104,17 +105,21 @@ function copyLibs{
     CREATEDIR("1:/libraries").
     FOR name in libs:KEYS
     {
-        COMPILE libs[name][1].
-        IF libs[name][0] = False {
-            SET libs[name][0] TO True.
-            SET libs[name][2] TO name + ".ksm".
-        }
         IF compiler {
-            COPYPATH(libs[name][2], "1:/libraries/").
+            IF libs[name][0] = False {
+                COMPILE libs[name][1].
+                SET libs[name][0] TO True.
+                SET libs[name][2] TO name + ".ksm".
+                COPYPATH(libs[name][2], "1:/libraries/").
+                DELETEPATH(libs[name][2]).
+            } ELSE {
+                COPYPATH(libs[name][2], "1:/libraries/").
+            }
         } ELSE {
-            COPYPATH(libs[name][1], "1:/libraries/").
+            IF libs[name][0] {
+                COPYPATH(libs[name][1], "1:/libraries/").
+            }
         }
-        DELETEPATH(libs[name][2]).
     }
     CD("0:/").
     COMPILE("runF.ks").
