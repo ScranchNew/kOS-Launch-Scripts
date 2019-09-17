@@ -1447,8 +1447,9 @@ function p_Launch {
 
     LOCAL LOCK acc TO AVAILABLETHRUST/MASS.
     LOCAL LOCK safeAcc TO MAX(acc, 0.0001).
-    LOCAL LOCK maxTWR TO safeacc/(BODY:MU/(BODY:RADIUS^2)).
-    LOCAL LOCK goalTWR TO min(maxTWR, allowedTWR).
+    LOCAL LOCK TWR TO safeacc/(BODY:MU/(BODY:RADIUS^2)).
+    LOCAL LOCK goalTWR TO min(TWR, allowedTWR).
+    LOCAL LOCK maxThrot TO goalTWR/TWR.
 
     LOCAL sheight TO BODY:ATM:HEIGHT/3.
     IF NOT BODY:ATM:EXISTS
@@ -1489,7 +1490,7 @@ function p_Launch {
         }
     }
     // precise burn when close to target trajectory
-    LOCAL throt TO goalTWR/maxTWR.
+    LOCAL throt TO maxThrot.
     LOCK THROTTLE TO throt.
     LOCAL thrPID TO PIDLOOP(thrPID_ks[0], 0, thrPID_ks[2], 0, 1).
     SET thrPID:SETPOINT TO peAlt.
@@ -1522,7 +1523,7 @@ function p_Launch {
     {
         a_Stage().
         SET thrPID:KP TO thrPID_ks[0]/goalTWR.
-        SET throt TO thrPID:UPDATE(TIME:SECONDS, APOAPSIS).
+        SET throt TO min(maxThrot, thrPID:UPDATE(TIME:SECONDS, APOAPSIS)).
         IF incPIDon
         {
             SET Linc TO pInc + incPID:UPDATE(TIME:SECONDS, rIncl).
