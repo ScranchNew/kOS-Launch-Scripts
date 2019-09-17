@@ -28,7 +28,7 @@ function s_Layout {
         GLOBAL Stl TO 8.					// Line for subprogram-status
 
         IF (DEFINED mLog) = False OR (NewData:haskey("reset") AND NewData["reset"]) {
-            GLOBAL mLog TO list().              // All lines logged
+            GLOBAL mLog TO LIST().              // All lines logged
             GLOBAL mLogL TO 0.                  // The log line, that was last printed
             GLOBAL mMission TO "".              // The mission name
             GLOBAL mSubProg TO "".              // The subprogram name
@@ -55,17 +55,17 @@ function s_Layout {
     {
         FOR key IN NewData:Keys
         {
-            IF key = "Log" {            // Log a string at the current time by passing a string or a list of strings.
+            IF key = "Log" {            // Log a string at the current time by passing a string or a LIST of strings.
                 LOCAL sTime TO TIME - missiontime.
                 LOCAL mTime TO TIME - sTime.
-                IF NewData[key]:istype("List")
+                IF NewData[key]:istype("LIST")
                 {
                     FOR line IN NewData[key]
                     {
-                        mLog:ADD(list(mTime, line:TOSTRING)).
+                        mLog:ADD(LIST(mTime, line:TOSTRING)).
                     }
                 } ELSE {
-                    mLog:ADD(list(mTime, NewData[key]:TOSTRING)).
+                    mLog:ADD(LIST(mTime, NewData[key]:TOSTRING)).
                 }
                 s_Print_Log().
             }
@@ -179,11 +179,11 @@ function s_Logspace_Clear {
 }
 
 function s_Choose_from_List {
-// lets you choose an item from a list using the console
+// lets you choose an item from a LIST using the console
     DECLARE Parameter name, itemList.
 
     s_Logspace_Clear().
-    PRINT "Choose one " + name + " from the list:" AT (1, Logl).
+    PRINT "Choose one " + name + " from the LIST:" AT (1, Logl).
     PRINT "Your choice: " AT (1, Logl + 2).
 
     LOCAL inputstring TO "".
@@ -326,7 +326,7 @@ function s_Print_Info {
 function s_Log {
 //logs text to layout
     DECLARE Parameter text.
-            //text:string or list of strings. text to log
+            //text:string or LIST of strings. text to log
             
     IF (DEFINED layoutDone) = False 
     {
@@ -342,22 +342,22 @@ function s_Info_push {
             //name: Name of info
             //text: Text of info
     
-    IF (name:TYPENAME = "list" AND text:TYPENAME <> "list") OR (name:TYPENAME <> "list" AND text:TYPENAME = "list") {
+    IF (name:TYPENAME = "LIST" AND text:TYPENAME <> "LIST") OR (name:TYPENAME <> "LIST" AND text:TYPENAME = "LIST") {
         RETURN False.
     }
 
     // Adds tupels of name and info to the pushList
-    LOCAL pushList TO list().
-    IF name:TYPENAME = "list" {
+    LOCAL pushList TO LIST().
+    IF name:TYPENAME = "LIST" {
         FOR i in RANGE(name:LENGTH) {
             IF text:LENGTH > i {
-                pushList:ADD(list(name[i], text[i])).
+                pushList:ADD(LIST(name[i], text[i])).
             } ELSE {
-                pushList:ADD(list(name[i], "")).
+                pushList:ADD(LIST(name[i], "")).
             }
         }
     } ELSE {
-        pushList:ADD(list(name, text)).
+        pushList:ADD(LIST(name, text)).
     }
 
     IF DEFINED layoutDone = False {
@@ -375,29 +375,29 @@ function s_Info_ref {
     
 
     // Adds tupels of name and info to the pushList
-    LOCAL refList TO list().
+    LOCAL refList TO LIST().
     IF name <> "" {
-        IF (name:TYPENAME = "list" AND text:TYPENAME <> "list") OR (name:TYPENAME <> "list" AND text:TYPENAME = "list") {
+        IF (name:TYPENAME = "LIST" AND text:TYPENAME <> "LIST") OR (name:TYPENAME <> "LIST" AND text:TYPENAME = "LIST") {
             RETURN False.
         }
-        IF name:TYPENAME = "list" {
+        IF name:TYPENAME = "LIST" {
             FOR i in RANGE(text:LENGTH) {
                 IF name:LENGTH > i {
-                    refList:ADD(list(name[i], text[i])).
+                    refList:ADD(LIST(name[i], text[i])).
                 } ELSE {
-                    refList:ADD(list("", text[i])).
+                    refList:ADD(LIST("", text[i])).
                 }
             }
         } ELSE {
-            refList:ADD(list(name, text)).
+            refList:ADD(LIST(name, text)).
         }
     } ELSE {
-        IF text:TYPENAME = "list" {
+        IF text:TYPENAME = "LIST" {
             For i in RANGE(text:LENGTH) {
-                refList:ADD(list("", text[i])).
+                refList:ADD(LIST("", text[i])).
             }
         } ELSE {
-            refList:ADD(list("",text)).
+            refList:ADD(LIST("",text)).
         }
     }
 
@@ -644,8 +644,8 @@ function a_Prompt_Target {
 
     If useList 
     {
-        LOCAL targType TO s_Choose_from_List("targettype",list("Vessel","Body","SpaceObject")).
-        LOCAL targList TO list().
+        LOCAL targType TO s_Choose_from_List("targettype",LIST("Vessel","Body","SpaceObject")).
+        LOCAL targList TO LIST().
         LOCAL listString TO "".
         LOCAL counter TO 0.
         IF targType = 0 {
@@ -910,8 +910,8 @@ function c_Circ_Man {
 // calculates a maneuver node for a maneuver given as transition between two combinations of velocities outward and forward in orbit
     DECLARE Parameter dTime, vStart, vEnd, incChange IS 0.
             // dTime:[int]:                         time, when to start the manouver
-            // vStart:[list](vTangential, vRadial): velocity combination at start
-            // vEnd:[list](vTangential, vRadial):   velocity combination at the end
+            // vStart:[LIST](vTangential, vRadial): velocity combination at start
+            // vEnd:[LIST](vTangential, vRadial):   velocity combination at the end
             // incChange:[float]:                   additional inclination change
 
             // For example if the radial velocity (pointing in the up-direction) is 0, you are at apoapsis or periapsis.
@@ -968,7 +968,7 @@ function c_Orbit_Velocity_Vector {
             // truAn: The true anomaly at that point
             // orbt: The orbit
 
-    //Returns a list with [0]: The absolute value of the orbital velocity in the turning direction
+    //Returns a LIST with [0]: The absolute value of the orbital velocity in the turning direction
     //                    [1]: The value of the orbital velocity in radial outwards direction
 
     LOCAL _h TO SQRT(_mu * _sma * (1-_e^2)).
@@ -976,7 +976,7 @@ function c_Orbit_Velocity_Vector {
 
     LOCAL v_forw TO _h / _r.
     LOCAL v_rad TO _mu * _e * SIN(truAn) / _h.
-    RETURN list(v_forw, v_rad).
+    RETURN LIST(v_forw, v_rad).
 } 
 
 function c_Orbit_Vector {
@@ -991,7 +991,7 @@ function c_Orbit_Vector {
     LOCAL v_n TO v(SIN(inc)*SIN(omg),-SIN(inc)*COS(omg),COS(inc)).
     LOCAL v_Lan TO v(COS(omg), SIN(omg),0).
     LOCAL v_Forw TO v(-SIN(omg)*COS(inc), COS(omg)*COS(inc),SIN(inc)).
-    RETURN list(v_n, v_Lan, v_Forw).
+    RETURN LIST(v_n, v_Lan, v_Forw).
 }
 
 function c_AnDn_Anomaly {
@@ -1005,11 +1005,11 @@ function c_AnDn_Anomaly {
             //       orbit:  calculate for that orbit
 
     // Returns a lexicon of 3 items:
-    //      ["AN"]:     a list containing the [0]: True Anomaly of the Ascending Node
+    //      ["AN"]:     a LIST containing the [0]: True Anomaly of the Ascending Node
     //                                        [1]: Eccentric Anomaly of the Ascending Node
     //                                        [2]: Mean Anomaly of the Ascending Node
     //                                        [3]: Altitude of the Ascending Node above the BODY
-    //      ["DN"]:     a list containing the same items as ["AN"] for the Descending Node
+    //      ["DN"]:     a LIST containing the same items as ["AN"] for the Descending Node
     //      ["relInc"]: the relative inclination between the orbits
     
     IF targ = 1 {
@@ -1060,7 +1060,7 @@ function c_AnDn_Anomaly {
     }
 
             // true Anomaly             in [°]
-    LOCAL orbNodes TO lexicon("AN",list(m_Clamp(beta - ref:ARGUMENTOFPERIAPSIS, 360)),"DN",list(m_Clamp(beta - ref:ARGUMENTOFPERIAPSIS + 180, 360))).  
+    LOCAL orbNodes TO lexicon("AN",LIST(m_Clamp(beta - ref:ARGUMENTOFPERIAPSIS, 360)),"DN",LIST(m_Clamp(beta - ref:ARGUMENTOFPERIAPSIS + 180, 360))).  
     IF elliptic_orbit {
         FOR _node in orbNodes:Keys {
             // eccentric Anomaly        in [°]
@@ -1208,7 +1208,7 @@ function c_Closest_Approach {
 // I suggest raising the allowed operations per tick for kOS.
 
     DECLARE Parameter orb1, orb2, anomalyOffset TO 0, phi_min TO 0, delt_phi TO 360, phi_start TO orb1:TRUEANOMALY, epoch_start TO TIME:SECONDS.
-    // It RETURNs a list of [n]: Encounter-lists with each having:
+    // It RETURNs a LIST of [n]: Encounter-lists with each having:
         // [0]: The distance at Encounter
         // [1]: Mean Anomaly of orbit 1 at Encounter
         // [2]: True Anomaly of orbit 1 at Encounter
@@ -1221,7 +1221,7 @@ function c_Closest_Approach {
     LOCAL M1_0 TO m_Clamp(orb1:MEANANOMALYATEPOCH + (epoch_start - orb1:EPOCH) * 360/orb1:PERIOD, 360).
     LOCAL M2_0 TO m_Clamp(orb2:MEANANOMALYATEPOCH + anomalyOffset + (epoch_start - orb2:EPOCH) * 360/orb2:PERIOD, 360).
 
-    LOCAL distList TO list().
+    LOCAL distList TO LIST().
     FOR i IN RANGE(0,div) {
         LOCAL phi TO phi_min + i*delt_phi/div.
         LOCAL phi_1 TO m_Clamp(phi_start + phi, 360).
@@ -1231,9 +1231,9 @@ function c_Closest_Approach {
         LOCAL M_2 TO m_Clamp(M2_0 + T * 360 / orb2:PERIOD, 360).
         LOCAL phi_2 TO c_Tru_An_from_Mean(M_2, orb2:ECCENTRICITY).
         LOCAL pos_2 TO c_Orbit_Pos(False, phi_2, orb2:ARGUMENTOFPERIAPSIS, orb2:LAN, orb2:ECCENTRICITY, orb2:INCLINATION, orb2:SEMIMAJORAXIS).
-        distList:ADD(list((pos_1 - pos_2):MAG, M_2, phi_2)).
+        distList:ADD(LIST((pos_1 - pos_2):MAG, M_2, phi_2)).
     }
-    LOCAL retList TO list().
+    LOCAL retList TO LIST().
     LOCAL lastDist TO distList[div - 1][0].
     LOCAL nextDist TO distList[1][0].
     FOR i in RANGE(0,div) {
@@ -1247,7 +1247,7 @@ function c_Closest_Approach {
             LOCAL rClose TO c_r_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY, orb1:SEMIMAJORAXIS).
             IF rClose * delt_phi * CONSTANT:PI/(180*div) < 100 {
                 LOCAL M_1 TO c_Mean_An_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY).
-                retList:ADD(list(distList[i][0], M_1, phiClose + phi_start, distList[i][1], distList[i][2], rClose)).
+                retList:ADD(LIST(distList[i][0], M_1, phiClose + phi_start, distList[i][1], distList[i][2], rClose)).
             } ELSE {
                 LOCAL subRetList TO c_Closest_Approach(orb1, orb2, anomalyOffset, phiClose - delt_phi/div, 2*delt_phi/div, phi_start, epoch_start).
                 FOR Ret in subRetList {
@@ -1294,12 +1294,12 @@ function c_Safe_Orientation {
 // calculates an orientation where all extendable solar panels will be exposed as much as possible.
 
     LOCAL sParts TO SHIP:PARTS.
-    LOCAL sPanels TO list().
+    LOCAL sPanels TO LIST().
     FOR item IN sParts {
         IF item:name = "largeSolarPanel" {
-            sPanels:ADD(list(item, 15.25)).
+            sPanels:ADD(LIST(item, 15.25)).
         } ELSE IF item:name = "solarPanels3" OR item:name = "solarPanels4" {
-            sPanels:ADD(list(item, 1)).
+            sPanels:ADD(LIST(item, 1)).
         }
     }
     LOCAL currentVector TO V(0,0,0).
@@ -1341,7 +1341,7 @@ function p_Orb_Burn {
             RETURN False.
         }
     }
-    LOCAL nodeBackup TO list().
+    LOCAL nodeBackup TO LIST().
     FOR node IN allNodes
     {
         IF node <> manNode{
@@ -1406,8 +1406,8 @@ function p_Launch {
 
     LOCAL allowedTWR TO 3.
 
-    LOCAL incPID_ks TO list(0.04, 0.07, 0.03).
-    LOCAL thrPID_ks TO list(0.001, 0.00001, 0).
+    LOCAL incPID_ks TO LIST(0.04, 0.07, 0.03).
+    LOCAL thrPID_ks TO LIST(0.0001, 0.00001, 0.00005).
 
     IF (DEFINED layoutDone) = False 
     {
@@ -1426,38 +1426,44 @@ function p_Launch {
 
     s_Sub_Prog("p_Launch").
 
-    s_Info_push(list("Periapsis:",             "Apoapsis:",              "Obt. inc.:"),
-                list(round(peAlt/1000) + "km", round(apAlt/1000) + "km", round(pInc) + "°")).
+    s_Info_push(LIST("Periapsis:",             "Apoapsis:",              "Obt. inc.:"),
+                LIST(round(peAlt/1000) + "km", round(apAlt/1000) + "km", round(pInc) + "°")).
 
     s_Status("Engine warmup").
 
-    // startup procedure
-    LOCAL tnow TO TIME:SECONDS.
-    a_Stage().
-    IF STAGE:RESOURCESLEX:haskey("SolidFuel") = False
-    {
-        LOCK THROTTLE TO (TIME:SECONDS - tnow)/5.
-        WAIT until (TIME:SECONDS - tnow > 5).
-    } ELSE {
-        LOCK THROTTLE TO (TIME:SECONDS - tnow)/1.
-        WAIT until (TIME:SECONDS - tnow > 1).
-    }
-    a_Stage().
-    s_Stage(STAGE:NUMBER - 1).
-
+    // Initialize thrust calculus
     LOCAL LOCK acc TO AVAILABLETHRUST/MASS.
     LOCAL LOCK safeAcc TO MAX(acc, 0.0001).
     LOCAL LOCK TWR TO safeacc/(BODY:MU/(BODY:RADIUS^2)).
     LOCAL LOCK goalTWR TO min(TWR, allowedTWR).
     LOCAL LOCK maxThrot TO goalTWR/TWR.
 
+    // startup procedure
+    LOCAL tnow TO TIME:SECONDS.
+    a_Stage().
+    IF STAGE:RESOURCESLEX:haskey("SolidFuel") = False
+    {
+        LOCK THROTTLE TO maxThrot*(TIME:SECONDS - tnow)/3.
+        WAIT until (TIME:SECONDS - tnow > 3).
+    } ELSE {
+        LOCK THROTTLE TO maxThrot*(TIME:SECONDS - tnow)/1.
+        WAIT until (TIME:SECONDS - tnow > 1).
+    }
+    a_Stage().
+    LOCK THROTTLE TO maxThrot.
+    s_Stage(STAGE:NUMBER - 1).
+
+    // The height, where the rocket flies at an angle of 45°
     LOCAL sheight TO BODY:ATM:HEIGHT/3.
     IF NOT BODY:ATM:EXISTS
     {
         SET sheight TO peAlt/5.
     }
 
-    LOCAL vRef TO c_Orb_Vel(0, 70000 - BODY:RADIUS, peAlt, MAX(BODY:ATM:HEIGHT, 20000)).	// inclination control
+    // Calculates the orbital speed the rocket should have after reaching it's desired inclination.
+    LOCAL vRef TO c_Orb_Vel(0, 70000 - BODY:RADIUS, peAlt, MAX(BODY:ATM:HEIGHT, 20000)).
+
+    // Calculates the direction the rocket will steer towards.
     LOCAL Linc TO ARCTAN((vRef * SIN(pInc)/SQRT(2))/(vRef * COS(pInc)/SQRT(2) - VELOCITY:ORBIT:MAG)).
     IF pInc >= 0 
     {
@@ -1466,34 +1472,39 @@ function p_Launch {
         IF Linc > 0 { SET Linc TO Linc - 180.}
     }
 
-    LOCAL LOCK Lang TO ARCTAN(sheight/(ALTITUDE * SQRT(MAX(goalTWR, 1)/2))).			// angle follows log(x) curve.
+    // The above horizon, the rocket steers towards. It follows a log(x) curve.
+    LOCAL LOCK Lang TO ARCTAN(sheight/(ALTITUDE * SQRT(MAX(goalTWR, 1)/2))).
+
+    // Start the steering
     LOCK STEERING TO HEADING(90-Linc,Lang).
 
-    LOCAL incPIDon TO False.
-    LOCAL incPID TO PIDLOOP(incPID_ks[0], incPID_ks[1], incPID_ks[2], -5, 5).
-    SET incPID:SETPOINT TO pInc.
-
-    LOCAL rIncl TO 0.
+    LOCAL rIncl TO 0.   // The actual inclination
     IF pInc >= 0 {
         LOCK rIncl TO ORBIT:INCLINATION.
     } ELSE {
         LOCK rIncl TO -ORBIT:INCLINATION.
     }
 
+    // After reaching the desired inclination this PID-LOOP keeps it there by updating Linc.
+    LOCAL incPIDon TO False.
+    LOCAL incPID TO PIDLOOP(incPID_ks[0], incPID_ks[1], incPID_ks[2], -5, 5).
+    SET incPID:SETPOINT TO pInc.
+
+
     IF ABS(pInc) > 0.5
     {
-        WHEN (ABS(rIncl - pInc) < 0.3 AND Lang < 55) THEN {
+        WHEN (ABS(rIncl - pInc) < 0.3 AND Lang < 55) THEN 
+        {
             s_Log("Target inclination reached").
             incPID:RESET.
             SET incPIDon TO True.
             ON SHIP:STATUS {incPID:RESET.}
         }
     }
+
     // precise burn when close to target trajectory
-    LOCAL throt TO maxThrot.
-    LOCK THROTTLE TO throt.
-    LOCAL thrPID TO PIDLOOP(thrPID_ks[0], 0, thrPID_ks[2], 0, 1).
-    SET thrPID:SETPOINT TO peAlt.
+    LOCAL twrPID TO PIDLOOP(thrPID_ks[0], 0, thrPID_ks[2], 0, allowedTWR).
+    SET twrPID:SETPOINT TO peAlt.
 
     s_Log("Liftoff!").
     s_Status("ascending").
@@ -1516,20 +1527,35 @@ function p_Launch {
 
     WHEN APOAPSIS / peAlt>= 1  THEN
     {
-        SET thrPID:KI TO thrPID_ks[1].
+        SET twrPID:KI TO thrPID_ks[1].
     }
+
+    s_Info_push(LIST("ThrottlePID:","maxThrot:","IncPID:"),
+                LIST("","","")).
+
+    LOCAL APlist TO LIST(0,0,0,0).
 
     UNTIL (APOAPSIS >= peAlt - 1 and SHIP:STATUS	<> "FLYING")		//autostageing and PID
     {
         a_Stage().
-        SET thrPID:KP TO thrPID_ks[0]/goalTWR.
-        SET throt TO min(maxThrot, thrPID:UPDATE(TIME:SECONDS, APOAPSIS)).
+
+        SET APlist TO LIST(APOAPSIS, APlist[0], APlist[1], APlist[2]).
+        LOCAL interAP TO APlist[3]+3*(APlist[0]+APlist[1]-APlist[2]-APlist[3])/4.
+
+        LOCAL PIDtwr TO twrPID:UPDATE(TIME:SECONDS, interAP).
+        LOCK THROTTLE TO PIDtwr/TWR.
+
+        LOCAL PIDinc TO incPID:UPDATE(TIME:SECONDS, rIncl).
         IF incPIDon
         {
-            SET Linc TO pInc + incPID:UPDATE(TIME:SECONDS, rIncl).
+            SET Linc TO pInc + PIDinc.
         }
+
+        s_Info_ref( LIST("",            "",             ""),
+                    LIST(round(PIDtwr,2), round(maxThrot,2), round(PIDinc,2))).
         WAIT 0.
     }
+    s_Info_pop().
 
     s_Log("Coast to Apoapsis").
     IF p_Orb_Burn(c_Simple_Man(1, apAlt))			// circularize
@@ -1617,7 +1643,7 @@ function p_Launch_To_Rendevouz {
 
     IF ABS(goalInc) > 1.5 {
         s_Status("Calculations complete").
-        s_Log(list("Launch calculations complete:", "Wait " + dTTime:CLOCK + " for launch")).
+        s_Log(LIST("Launch calculations complete:", "Wait " + dTTime:CLOCK + " for launch")).
         a_Warp_To(dTime).
     }
     p_Launch(goalAlt, goalAlt, goalInc).
@@ -1681,7 +1707,7 @@ function p_Slow_Rendevouz {
 
     s_Log("Calculated transfer maneuver").
 
-    LOCAL manNode TO c_Circ_Man(timeToNode, vCurrentMyNode, list(vMyNode, 0), -earlyIncChange * relInc).
+    LOCAL manNode TO c_Circ_Man(timeToNode, vCurrentMyNode, LIST(vMyNode, 0), -earlyIncChange * relInc).
     p_Orb_Burn(manNode).
     s_Sub_Prog("p_Slow_Rendevouz").
 
@@ -1747,7 +1773,7 @@ function p_Slow_Rendevouz {
 
     s_Log("Calculated wait maneuver").
 
-    SET manNode TO c_Circ_Man(timeToNode, list(vMyNode, 0), list(vAfterNode, 0), -(1-earlyIncChange) * inc_wait).
+    SET manNode TO c_Circ_Man(timeToNode, LIST(vMyNode, 0), LIST(vAfterNode, 0), -(1-earlyIncChange) * inc_wait).
     p_Orb_Burn(manNode).
     s_Sub_Prog("p_Slow_Rendevouz").
 
@@ -1784,7 +1810,7 @@ function p_Slow_Rendevouz {
         SET vAfterNode TO c_Orb_Vel(0, pe_hohman, ap_hohman, r_wait, 0).
         IF ABS(vMyNode - vAfterNode) > 1 OR waitMyOrbNum = 1 {
             SET didBurn TO 1.
-            SET manNode TO c_Circ_Man(timeToNode, list(vMyNode, 0), list(vAfterNode, 0), 0).
+            SET manNode TO c_Circ_Man(timeToNode, LIST(vMyNode, 0), LIST(vAfterNode, 0), 0).
             p_Orb_Burn(manNode).
             s_Sub_Prog("p_Slow_Rendevouz").
         } ELSE {
@@ -1876,7 +1902,7 @@ function p_Direct_Rendevouz {
         // Calculate my velocity change at the transfer point
         LOCAL my_v_0_trans TO c_Orbit_Velocity_Vector(my_phi_trans).
         LOCAL my_v_1_trans TO c_Orb_Vel(0,my_r_trans, tar_r_trans, my_r_trans, 0).
-        LOCAL trans_node TO c_Circ_Man(d_t_trans, my_v_0_trans, list(my_v_1_trans, 0), 0).
+        LOCAL trans_node TO c_Circ_Man(d_t_trans, my_v_0_trans, LIST(my_v_1_trans, 0), 0).
         ADD trans_node.
 
         // Calculate the height, true anomaly and eccentricity of the transfer orbit at the inclination change
@@ -1915,7 +1941,7 @@ function p_Direct_Rendevouz {
         // Get the closest encounter and the phase angle at the encounter.
         LOCAL encounters TO c_Closest_Approach(inc_node:ORBIT, targ:OBT, anomalyOffset, 0, 360, inc_node:ORBIT:TRUEANOMALY, inc_node:ORBIT:EPOCH).
         LOCAL minDist TO encounters[0][5] * 3.
-        LOCAL minEnc TO list().
+        LOCAL minEnc TO LIST().
         FOR enc in encounters {
             IF enc[0] < minDist {
                 SET minEnc TO enc.
@@ -1968,7 +1994,7 @@ function p_Match_Orbit {
     LOCAL encounters TO c_Closest_Approach(OBT, targ:OBT, anomalyOffset).
     s_Log("Calculated matching maneuver").
     LOCAL minDist TO encounters[0][5] * 3.
-    LOCAL minEnc TO list().
+    LOCAL minEnc TO LIST().
     FOR enc in encounters {
         IF enc[0] < minDist {
             SET minEnc TO enc.
