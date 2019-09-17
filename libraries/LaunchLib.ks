@@ -1407,7 +1407,6 @@ function p_Launch {
     LOCAL allowedTWR TO 3.
 
     LOCAL incPID_ks TO LIST(0.04, 0.07, 0.03).
-    LOCAL thrPID_ks TO LIST(0.0001, 0.00001, 0.00005).
 
     IF (DEFINED layoutDone) = False 
     {
@@ -1502,10 +1501,6 @@ function p_Launch {
         }
     }
 
-    // precise burn when close to target trajectory
-    LOCAL twrPID TO PIDLOOP(thrPID_ks[0], 0, thrPID_ks[2], 0, allowedTWR).
-    SET twrPID:SETPOINT TO peAlt.
-
     s_Log("Liftoff!").
     s_Status("ascending").
 
@@ -1525,25 +1520,20 @@ function p_Launch {
         }
     }
 
-    WHEN APOAPSIS / peAlt>= 1  THEN
-    {
-        SET twrPID:KI TO thrPID_ks[1].
-    }
-
-    s_Info_push(LIST("ThrottlePID:","maxThrot:","IncPID:"),
-                LIST("","","")).
-
-    LOCAL APlist TO LIST(0,0,0,0).
+    s_Info_push(LIST("GoalThrot:"),
+                LIST("")).
 
     UNTIL (APOAPSIS >= peAlt - 1 and SHIP:STATUS	<> "FLYING")		//autostageing and PID
     {
         a_Stage().
 
-        SET APlist TO LIST(APOAPSIS, APlist[0], APlist[1], APlist[2]).
-        LOCAL interAP TO APlist[3]+3*(APlist[0]+APlist[1]-APlist[2]-APlist[3])/4.
+        // The change of apoapsis per change of forward speed
+        LOCAL dAPdV TO (PERIAPSIS + APOAPSIS + 2*BODY:RADIUS)^2 * SQRT(BODY:MU*(2/(ALTITUDE + BODY:RADIUS) - 2/(PERIAPSIS + APOAPSIS + 2*BODY:RADIUS)))/BODY:MU.
+        LOCAL apErr TO apAlt - APOAPSIS.
+        LOCAL maxAcc TO apErr/dAPdV.        // Acceleration to reach the target Apoapsis in 1 second
+        LOCAL goalThrot TO maxAcc/safeAcc.  // Throttle needed for that
 
-        LOCAL PIDtwr TO twrPID:UPDATE(TIME:SECONDS, interAP).
-        LOCK THROTTLE TO PIDtwr/TWR.
+        LOCK THROTTLE TO min(maxThrot, SQRT(max(0, goalThrot))).
 
         LOCAL PIDinc TO incPID:UPDATE(TIME:SECONDS, rIncl).
         IF incPIDon
@@ -1551,8 +1541,8 @@ function p_Launch {
             SET Linc TO pInc + PIDinc.
         }
 
-        s_Info_ref( LIST("",            "",             ""),
-                    LIST(round(PIDtwr,2), round(maxThrot,2), round(PIDinc,2))).
+        s_Info_ref( LIST(""),
+                    LIST(round(goalThrot,3))).
         WAIT 0.
     }
     s_Info_pop().
@@ -1895,6 +1885,7 @@ function p_Direct_Rendevouz {
         // Find the radius and true anomaly of the transfer point
         LOCAL my_phi_trans TO m_Clamp(OBT:TRUEANOMALY + 360*d_t_trans/OBT:PERIOD, 360).
         LOCAL my_r_trans TO c_r_from_Tru(my_phi_trans).
+        
         // Find the radius of the intercept point with the target
         LOCAL tar_r_trans TO c_r_from_Tru(m_Clamp(targ:OBT:TRUEANOMALY + anomalyOffset + 360*d_t_trans/targ:OBT:PERIOD + 180 - goal_phase_angle,360)
                                         ,targ:OBT:ECCENTRICITY, targ:OBT:SEMIMAJORAXIS).
