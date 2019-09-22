@@ -250,9 +250,9 @@ function s_Choose_from_List {
                 Print inputString:padright(20):substring(0,20) AT (10, Logl + 1).
                 LOCAL inputNum TO inputString:TONUMBER(-1).
                 IF inputNum < itemList:length AND inputNum >= 0 {
-                    PRINT itemList[floor(inputNum)]:TOSTRING:padright(20):substring(0,20) AT (10, Logl + 3).
+                    PRINT itemList[floor(inputNum)]:TOSTRING:padright(35):substring(0,35) AT (10, Logl + 3).
                 } ELSE {
-                    PRINT "":padright(20):substring(0,20) AT (10, Logl + 3).
+                    PRINT "":padright(35):substring(0,35) AT (10, Logl + 3).
                 }
             } ELSE {
                 SET retPress TO True.
@@ -1520,12 +1520,16 @@ function p_Launch {
         }
     }
 
-    s_Info_push(LIST("GoalThrot:"),
-                LIST("")).
 
     UNTIL (APOAPSIS >= peAlt - 1 and SHIP:STATUS	<> "FLYING")		//autostageing and PID
     {
-        a_Stage().
+        IF a_Stage() {
+            IF AVAILABLETHRUST = 0 {    // Point forward to avoid collisions with stage parts.
+                LOCK STEERING TO SRFPROGRADE.
+            } ELSE {
+                LOCK STEERING TO HEADING(90-Linc,Lang).
+            }
+        }
 
         // The change of apoapsis per change of forward speed
         LOCAL dAPdV TO (PERIAPSIS + APOAPSIS + 2*BODY:RADIUS)^2 * SQRT(BODY:MU*(2/(ALTITUDE + BODY:RADIUS) - 2/(PERIAPSIS + APOAPSIS + 2*BODY:RADIUS)))/BODY:MU.
@@ -1541,11 +1545,8 @@ function p_Launch {
             SET Linc TO pInc + PIDinc.
         }
 
-        s_Info_ref( LIST(""),
-                    LIST(round(goalThrot,3))).
         WAIT 0.
     }
-    s_Info_pop().
 
     s_Log("Coast to Apoapsis").
     IF p_Orb_Burn(c_Simple_Man(1, apAlt))			// circularize
@@ -2049,6 +2050,9 @@ function p_Close_Dist {
     IF dist_raw:MAG > 0.1 * (ALTITUDE + BODY:RADIUS) {
         s_Status("Vessels too far apart").
         RETURN False.
+    } ELSE IF dist_raw:MAG < 201 {
+        s_Status("Vessels  close enough").
+        RETURN False.
     }
 
     LOCAL v_Pro TO PROGRADE:FOREVECTOR.
@@ -2269,7 +2273,7 @@ function p_Dock {
     }
     s_Log("Starting docking procedure").
     s_Status("Translating to dock.").
-    dock_with_port(0, 1, 0, 1.5, 1).
+    dock_with_port(0, 1, 0, 1, 1).
     s_Log("Docked").
 }
 
@@ -2411,10 +2415,6 @@ function p_Insertion {
     p_Orb_Burn(c_Simple_Man(1,pe)).
 }
 
-function p_Formation_angle {
-// 
-
-}
 
 // [QUIT] Always called last in a scrip. Closes everything.
 // _________________________________________________
