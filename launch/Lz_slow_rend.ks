@@ -9,5 +9,6 @@ IF ship:status = "PRELAUNCH"
     s_Mission("Launch to rendevouz").
     p_Launch_To_Rendevouz().
     p_Slow_Rendevouz().
+    p_Close_Dist().
     Quit().
 }
