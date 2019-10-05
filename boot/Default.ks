@@ -1,73 +1,91 @@
 @LAZYGLOBAL OFF.
 
+// Loads all libraries from the archive to the ship
+// If compiler is set to True they will be compiled first to save storage space
+// If startProgram is set to True it will promt you to start a script from 0:/launch
+// It will then load and execute the given script.
+
 DECLARE Parameter compiler TO True, startProgram TO True.
 
 WAIT 1.
+
+// If there is RemoteTech intregration it will check for a connection first
+LOCAL RT TO True.
 IF ADDONS:RT:AVAILABLE {
     GLOBAL Remote TO ADDONS:RT.
-    IF Remote:HASCONNECTION(SHIP) OR SHIP:STATUS = "PRELAUNCH"
-    {
-        copyLibs().
-        IF startProgram {
-            CLEARSCREEN.
-            PRINT "Choose a launchfile: ".
-            PRINT " ".
-            LOCAL filelist TO list().
-            CD("0:/launch").
-            LIST FILES in filelist.
-            CD("1:/").
-            PRINT filelist.
-            PRINT "":padright(30) AT (0, 2).
-            LOCAL inputstring TO "".
-            LOCAL correctInput TO False.
-            LOCAL fileNum TO -1.
-            Terminal:Input:CLEAR.
-            UNTIL correctInput
+    SET RT TO Remote:HASCONNECTION(SHIP).
+}
+
+IF RT OR SHIP:STATUS = "PRELAUNCH"
+{
+    // Copy the libraries
+    copyLibs().
+
+    // Prompt for a launchfile
+    IF startProgram {
+        // Print all available launchfiles
+        CLEARSCREEN.
+        PRINT "Choose a launchfile: ".
+        PRINT " ".
+        LOCAL filelist TO list().
+        CD("0:/launch").
+        LIST FILES in filelist.
+        CD("1:/").
+        PRINT filelist.
+        PRINT "":padright(30) AT (0, 2).
+        LOCAL inputstring TO "".
+        LOCAL correctInput TO False.
+        LOCAL fileNum TO -1.
+        Terminal:Input:CLEAR.
+        UNTIL correctInput
+        {
+            LOCAL retPress TO False.
+
+            // Gets your input
+            UNTIL retPress
             {
-                LOCAL retPress TO False.
-                UNTIL retPress
+                LOCAL char TO Terminal:Input:GetChar().
+                if char <> Terminal:Input:Return
                 {
-                    LOCAL char TO Terminal:Input:GetChar().
-                    if char <> Terminal:Input:Return
-                    {
-                        if char = Terminal:Input:Backspace {
-                            SET inputstring TO inputstring:substring(0,inputstring:length - 1).
-                        } ELSE {
-                            SET inputstring TO inputstring + char.
-                        }
-                        Print inputstring:padright(20):substring(0,20) AT (21, 0).
+                    if char = Terminal:Input:Backspace {
+                        SET inputstring TO inputstring:substring(0,inputstring:length - 1).
                     } ELSE {
-                        SET retPress TO True.
+                        SET inputstring TO inputstring + char.
                     }
-                }
-                SET fileNum TO inputstring:TONUMBER(-1).
-                IF fileNum >= filelist:length OR fileNum < 0
-                {
-                    PRINT "Input not usable. Try again." AT (1,1).
-                    SET inputstring TO "".
                     Print inputstring:padright(20):substring(0,20) AT (21, 0).
                 } ELSE {
-                    SET fileNum TO floor(fileNum).
-                    SET correctInput TO True.
+                    SET retPress TO True.
                 }
             }
-            LOCAL fName TO filelist[fileNum]:tostring.
-            SET fName TO fName:substring(0, fName:find("ks") - 1).
-            CD("0:/launch").
-            COMPILE (fName + ".ks").
-            COPYPATH(fName + ".ksm", "1:/").
-            DELETEPATH(fName + ".ksm").
-            CD("1:/").
-            RUNPATH(fName).
+            // Checks your input
+            SET fileNum TO inputstring:TONUMBER(-1).
+            IF fileNum >= filelist:length OR fileNum < 0
+            {
+                PRINT "Input not usable. Try again." AT (1,1).
+                SET inputstring TO "".
+                Print inputstring:padright(20):substring(0,20) AT (21, 0).
+            } ELSE {
+                SET fileNum TO floor(fileNum).
+                SET correctInput TO True.
+            }
         }
-        
-    } ELSE {
-        PRINT "ERROR: No Connection".
+        // Compiles and starts the selected file
+        LOCAL fName TO filelist[fileNum]:tostring.
+        SET fName TO fName:substring(0, fName:find("ks") - 1).
+        CD("0:/launch").
+        COMPILE (fName + ".ks").
+        COPYPATH(fName + ".ksm", "1:/").
+        DELETEPATH(fName + ".ksm").
+        CD("1:/").
+        RUNPATH(fName).
     }
+} ELSE {
+    PRINT "ERROR: No Connection".
 }
 
 function copyLibs{
-// Compiles and copies libraries from "Archive/libraries" to "1:/"
+// Compiles and copies libraries from "Archive/libraries" to "1:/libraries"
+// It is important that you keep your libraries in an uncompiled form or else this script might fuck up
 
     CD("0:/libraries").
     LOCAL libs TO lexicon().
