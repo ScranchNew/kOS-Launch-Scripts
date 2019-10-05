@@ -1443,7 +1443,7 @@ function p_Launch {
     IF STAGE:RESOURCESLEX:haskey("SolidFuel") = False
     {
         LOCK THROTTLE TO maxThrot*(TIME:SECONDS - tnow)/3.
-        WAIT until (TIME:SECONDS - tnow > 3).
+        WAIT until (TIME:SECONDS - tnow > 5).
     } ELSE {
         LOCK THROTTLE TO maxThrot*(TIME:SECONDS - tnow)/1.
         WAIT until (TIME:SECONDS - tnow > 1).
@@ -1595,7 +1595,7 @@ function p_Launch_To_Rendevouz {
 
     LOCAL SMA TO (targ:OBT:APOAPSIS + targ:OBT:PERIAPSIS)/2.                                            // calculating a sensible orbit height
     LOCAL minAlt TO BODY:ATM:HEIGHT + 20000.
-    LOCAL goalAlt TO BODY:RADIUS / 4.
+    LOCAL goalAlt TO BODY:RADIUS / 6.
     LOCAL goalDist TO goalAlt / 6.
 
     SET goalAlt TO MIN(MIN(SMA - goalDist, goalAlt), targ:OBT:PERIAPSIS).
