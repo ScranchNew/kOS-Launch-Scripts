@@ -19,7 +19,7 @@ function parseDeltaV {
 
     FOR part in shipParts                   // builds stagePartDict, stageEngineDict and rawDict
     {
-        IF part:typename = "ENGINE"
+        IF part:typename = "ENGINE" AND part:name <> "sepMotor1"
         {
             LOCAL sNum TO part:stage.
             IF stageEngineDict:HASKEY(sNUM) = False {
