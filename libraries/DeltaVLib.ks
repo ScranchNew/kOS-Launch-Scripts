@@ -2,6 +2,8 @@
 
 function parseDeltaV {
 // Parses the whole craft for engines, fuel, mass, etc. and calculates deltaV per stage
+// Does not work if you mix different fuel types being burned in one stage
+
     DECLARE Parameter pressure TO 0.
             // pressure used for the ISP, thrust, etc. Default is vacuum(0).
 
@@ -19,7 +21,8 @@ function parseDeltaV {
 
     FOR part in shipParts                   // builds stagePartDict, stageEngineDict and rawDict
     {
-        IF part:typename = "ENGINE" AND part:name <> "sepMotor1"
+        IF part:typename = "ENGINE" AND part:name <> "sepMotor1"    // Ignores Separatrons 
+                                                                    // TODO Ignore or manually work with solid rocket boosters
         {
             LOCAL sNum TO part:stage.
             IF stageEngineDict:HASKEY(sNUM) = False {
@@ -56,15 +59,21 @@ function parseDeltaV {
             // This part uses how the stage number for each part is listed in KSP to get all active engines (and their thrust/isp/etc) for each stage
             // This also accounts for asparagus staging
 
-            LOCAL maxStage TO eng:stage.
-            LOCAL minStage TO eng:parent:stage + 1.
-            SET rawDict[minStage][0] TO rawDict[minStage][0] + eng:MASS.
-            SET rawDict[minStage][1] TO rawDict[minStage][1] + eng:DRYMASS.
+            LOCAL maxStage TO eng:stage.            // The engine stage always is the last stage the engine is active in
+            LOCAL minStage TO eng:parent:stage + 1. // The parent stage is the first stage the engine is active in (somehow)
+
+            SET rawDict[minStage][0] TO rawDict[minStage][0] + eng:MASS.    // Adds up the mass
+            SET rawDict[minStage][1] TO rawDict[minStage][1] + eng:DRYMASS. // And the dry mass
+
             FOR relevStage in Range(minStage, maxStage + 1)
             {
+                // Sums up the thrust per ISP
                 SET rawDict[relevStage][2] TO rawDict[relevStage][2] + eng:availablethrustat(pressure)/eng:ispat(pressure).
+                // Sums up the thrust
                 SET rawDict[relevStage][3] TO rawDict[relevStage][3] + eng:availablethrustat(pressure).
+                // Sums up the massflow
                 SET rawDict[relevStage][4] TO rawDict[relevStage][4] + eng:availablethrustat(pressure)/(eng:ispat(pressure) * 9.81).
+                // Adds all relevant engines
                 rawDict[relevStage][5]:add(eng).
             }
             IF quietEng
@@ -77,7 +86,9 @@ function parseDeltaV {
     }
     FOR stageNum in rawDict:KEYS        // Gets the mean isp per stage
     {
-        IF rawDict[stageNum][2] <> 0{
+        IF rawDict[stageNum][2] <> 0
+        {
+            // By dividing combined thrust by the thrust per ISP you get the effective ISP
             SET rawDict[stageNum][2] TO rawDict[stageNum][3]/rawDict[stageNum][2].
         }
     }
@@ -140,6 +151,7 @@ function calc_Burn_Mean {
 
             // I used the rocket equation, Wolfram Alpha, Maple and some evil Integrals to get to these formulas.
             // Don't mess with them.
+            
             LOCAL t_1 TO - (CONSTANT:E^(ln(m_0)-(deltV*m_d)/F)-m_0)/m_d.                    // stage burn time
             LOCAL t_m TO (m_0*ln((m_d*t_1-m_0)/-m_0)+m_d*t_1)/(m_d*ln((m_0-m_d*t_1)/m_0)).  // stage mean burn time
 
