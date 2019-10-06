@@ -490,6 +490,7 @@ function s_Stage {
 
 function a_Stage {
 // Checks if staging is neccessary and does if it is
+    DECLARE Parameter stageTime TO 2.
             
     IF (DEFINED layoutDone) = False 
     {
@@ -501,8 +502,8 @@ function a_Stage {
         GLOBAL lastStage TO 0.  // The missiontime the last staging event happened
     }
 
-    // leaves at least 2 seconds between staging actions
-    IF missiontime - lastStage > 2 OR SHIP:STATUS = "Prelaunch"
+    // leaves at least "stageTime" seconds between staging actions
+    IF missiontime - lastStage > stageTime OR SHIP:STATUS = "Prelaunch"
     {
         LOCAL eng TO 0.
         LIST engines IN eng.
@@ -895,9 +896,9 @@ function c_Simple_Man {
 
     IF x1 <> 1 {
         SET burnPoint TO PERIAPSIS.
-        LOCK esta TO ETA:PERIAPSIS.
+        LOCAL LOCK esta TO ETA:PERIAPSIS.
     } ELSE {
-        LOCK esta TO ETA:APOAPSIS.
+        LOCAL LOCK esta TO ETA:APOAPSIS.
     }
 
     LOCAL vdiff TO c_Orb_Vel(0,x2,burnPoint,burnPoint) - c_Orb_Vel(0,0,0,burnPoint).
@@ -1479,9 +1480,9 @@ function p_Launch {
 
     LOCAL rIncl TO 0.   // The actual inclination
     IF pInc >= 0 {
-        LOCK rIncl TO ORBIT:INCLINATION.
+        LOCAL LOCK rIncl TO ORBIT:INCLINATION.
     } ELSE {
-        LOCK rIncl TO -ORBIT:INCLINATION.
+        LOCAL LOCK rIncl TO -ORBIT:INCLINATION.
     }
 
     // After reaching the desired inclination this PID-LOOP keeps it there by updating Linc.
