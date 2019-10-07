@@ -653,7 +653,7 @@ function a_Prompt_Target {
             SET listString TO "Vessel".
             LIST targets IN targList.
             FOR targ in RANGE(0, targList:LENGTH) {
-                IF targList[counter]:type = "SpaceObject" {
+                IF targList[counter]:typename = "SpaceObject" {
                     targList:REMOVE(counter).
                 } ELSE {
                     SET counter TO counter + 1.
@@ -892,13 +892,13 @@ function c_Simple_Man {
     LOCK THROTTLE TO 0.
 
     LOCAL burnPoint TO APOAPSIS.
-    LOCAL esta is 0.
 
+    LOCAL esta is 0.
     IF x1 <> 1 {
         SET burnPoint TO PERIAPSIS.
-        LOCAL LOCK esta TO ETA:PERIAPSIS.
+        LOCK esta TO ETA:PERIAPSIS.
     } ELSE {
-        LOCAL LOCK esta TO ETA:APOAPSIS.
+        LOCK esta TO ETA:APOAPSIS.
     }
 
     LOCAL vdiff TO c_Orb_Vel(0,x2,burnPoint,burnPoint) - c_Orb_Vel(0,0,0,burnPoint).
@@ -1401,7 +1401,7 @@ function p_Orb_Burn {
 
 function p_Launch {
 // launches into a circular with a given apoapsis, periapsis and inclination
-    DECLARE Parameter pAlt1 TO 150000, pAlt2 TO pAlt1, pInc TO 0.
+    DECLARE Parameter pAlt1 TO 100000, pAlt2 TO pAlt1, pInc TO 0.
             //pAlt:int	,orbit height
             //pInc:int	,orbit inclination
 
@@ -1478,11 +1478,11 @@ function p_Launch {
     // Start the steering
     LOCK STEERING TO HEADING(90-Linc,Lang).
 
-    LOCAL rIncl TO 0.   // The actual inclination
+    GLOBAL rIncl TO 0.   // The actual inclination
     IF pInc >= 0 {
-        LOCAL LOCK rIncl TO ORBIT:INCLINATION.
+        LOCK rIncl TO ORBIT:INCLINATION.
     } ELSE {
-        LOCAL LOCK rIncl TO -ORBIT:INCLINATION.
+        LOCK rIncl TO -ORBIT:INCLINATION.
     }
 
     // After reaching the desired inclination this PID-LOOP keeps it there by updating Linc.
@@ -2280,8 +2280,15 @@ function p_Dock {
 
 function p_Insertion {
 // Perform an orbital insertion after the next SOI-Change
-    DECLARE Parameter Ap TO 150000, Pe TO Ap, inc TO 0, aerobrake TO False.
-                    //AP: New Apoapsis after the full insertion, Pe: New Periapsis after the full insertion, inc: New inclination after the full insertion.
+    DECLARE Parameter Alt1 TO 100000, Alt2 TO Alt1, inc TO 0, targ TO 0,aerobrake TO False.
+        // Alt1: New first node after the full insertion (Ap or Pe), 
+        // Alt2: New second node after the full insertion, 
+        // inc: New inclination after the full insertion.
+        // targ: If not 0, the inclination will be relative to a given target
+        // aerobrake: TODO
+
+    LOCAL Ap TO max(Alt1, Alt2).
+    LOCAL Pe TO min(Alt1, Alt2).
 
     s_Sub_Prog("p_Insertion").
     IF NOT "ORBITING ESCAPING":CONTAINS(SHIP:STATUS){
@@ -2292,10 +2299,28 @@ function p_Insertion {
         s_Status("Wait for encounter").
         a_Warp_To(ETA:TRANSITION + 120).
     }
-    LOCAL pe_insertion TO BODY:ATM:HEIGHT + 30000.
+
+    s_Status("Checking for Errors").
+
+    IF targ <> 0 
+    {
+        IF NOT "Vessel,Body,SpaceObject":CONTAINS(targ:typename){
+            SET targ TO 0.
+        }
+        SET targ TO a_Check_Target(targ, 1+4+8).
+        UNTIL targ:TYPENAME <> "BOOLEAN" {
+            IF targ:TYPENAME = "BOOLEAN" {
+                SET targ TO a_Prompt_Target(True).
+            }
+            SET targ TO a_Check_Target(targ, 1+4+8).
+        }
+    }
+
+    LOCAL pe_insertion TO min(BODY:RADIUS/6, BODY:ATM:HEIGHT + 30000).
     LOCAL ap_insertion TO APOAPSIS + PERIAPSIS - pe_insertion.
 
-    IF ap_insertion < pe_insertion AND ap_insertion + BODY:RADIUS > 0{
+    IF ap_insertion < pe_insertion AND ap_insertion + BODY:RADIUS > 0
+    {
         s_Status("Orbit to low").
         Return False.
     }
@@ -2340,7 +2365,7 @@ function p_Insertion {
     p_Orb_Burn(adjustment_burn).
     s_Sub_Prog("p_Insertion").
 
-    LOCAL inc_nodes TO c_AnDn_Anomaly(OBT,0).
+    LOCAL inc_nodes TO c_AnDn_Anomaly(OBT, targ).
     LOCAL insertion_node TO inc_nodes["AN"].
     LOCAL inc_insertion TO inc_nodes["relInc"] - ABS(inc).
     IF ABS(m_Clamp(inc_nodes["DN"][0], 180, -180)) < ABS(m_Clamp(insertion_node[0], 180, -180)) {
@@ -2364,7 +2389,7 @@ function p_Insertion {
         p_Orb_Burn(first_insertion).
         s_Sub_Prog("p_Insertion").
 
-        SET inc_nodes TO c_AnDn_Anomaly(OBT,0).
+        SET inc_nodes TO c_AnDn_Anomaly(OBT, targ).
         SET insertion_node TO inc_nodes["AN"].
         SET inc_insertion TO inc_nodes["relInc"] - ABS(inc).
         IF ABS(m_Clamp(inc_nodes["DN"][0], 180, -180)) < ABS(m_Clamp(insertion_node[0], 180, -180)) {
