@@ -116,9 +116,11 @@ function calc_Burn_Mean {
 // If the burn means lines up with the maneuver node you will hit the orbital change pretty much perfectly every time
 // #itjustworks
 
+// (Full throttle is assumed for the burn duration)
+
     declare Parameter dv, pressure TO 0, stageTime TO 2.
             // dv: deltaV needed for the burn
-            // pressure: at what pressure lever the burn is performed (0 is vacuum, 1 is the Kerbal Space Center)
+            // pressure: at what pressure level the burn is performed (0 is vacuum, 1 is the Kerbal Space Center)
             // stageTime: Time alotted to each staging process
 
     LOCAL wholeDV TO 0.                 // sum of the full deltaV of all stages accounted for in the burn 
