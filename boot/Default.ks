@@ -100,8 +100,8 @@ function copyLibs{
 
             IF kFile:tostring:contains(".ksm"){
                 BREAK.
-                SET fname TO kFile:tostring:REMOVE(fname-4,4).
-                SET isCompiled TO True.
+                // SET fname TO kFile:tostring:REMOVE(fname-4,4).
+                // SET isCompiled TO True.
             } ELSE {
                 SET fname TO kFile:tostring:REMOVE(fname-3,3).
             }
