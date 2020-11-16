@@ -1,15 +1,17 @@
+@LAZYGLOBAL OFF.
+
 //KOS
 //  undo the lastmost drawing by diraxesdraw
 //
 
 IF (DEFINED draws) = False {
-  SET draws TO list().
+  GLOBAL draws TO list().
 }
 
-SET axisNum to draws[draws:length-1]:length -1.
+LOCAL axisNum to draws[draws:length-1]:length -1.
 UNTIL axisNum < 0 {
-  SET thisOne to draws[draws:length-1][axisNum].
-  set thisOne:SHOW to false.
+  LOCAL thisOne to draws[draws:length-1][axisNum].
+  SET thisOne:SHOW to false.
   draws[draws:length-1]:REMOVE(axisNum).
   SET axisNum to axisNum - 1.
 }.
