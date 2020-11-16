@@ -107,23 +107,23 @@ function dock_with_port {
 
         LOCAL controllingPart to ship:controlpart.
 
-        //Lock steering to the same orientation than the target's port, but in the opposite direction (so the ship is facing the target port)
-        lock steering to lookdirup(-trgt:portfacing:forevector, trgt:portfacing:upvector).
+        //LOCK steering to the same orientation than the target's port, but in the opposite direction (so the ship is facing the target port)
+        LOCK steering to lookdirup(-trgt:portfacing:forevector, trgt:portfacing:upvector).
         wait until vang(ship:facing:forevector, -trgt:portfacing:forevector) < 5 and vang(ship:facing:upvector, trgt:portfacing:upvector) < 5.
     
         rcs on.
 
         //Target-centered base, with the x axis pointing forward out of the target
-        lock vtx to trgt:portfacing:forevector.     //x axis is straight out of the target
-        lock vty to trgt:portfacing:upvector.		//y axis is straight up out of the target
-        lock vtz to trgt:portfacing:rightvector.	//z axis is starboard out of the target
+        LOCK vtx to trgt:portfacing:forevector.     //x axis is straight out of the target
+        LOCK vty to trgt:portfacing:upvector.		//y axis is straight up out of the target
+        LOCK vtz to trgt:portfacing:rightvector.	//z axis is starboard out of the target
 
         //Ship and target position in SHIP-RAW coordinates
-        lock spos to ship:controlpart:position.
-        lock tpos to trgt:position.
-        lock tspos TO tShip:position.
+        LOCK spos to ship:controlpart:position.
+        LOCK tpos to trgt:position.
+        LOCK tspos TO tShip:position.
 
-        lock targetVel to tShip:velocity:orbit - ship:velocity:orbit.	//Target-relative velocity
+        LOCK targetVel to tShip:velocity:orbit - ship:velocity:orbit.	//Target-relative velocity
 
         LOCAL stop to false.
 

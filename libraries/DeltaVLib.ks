@@ -7,12 +7,12 @@ function parseDeltaV {
     DECLARE Parameter pressure TO 0.
             // pressure used for the ISP, thrust, etc. Default is vacuum(0).
 
-    global deltaVdone TO TRUE.
+    GLOBAL deltaVdone TO TRUE.
 
-    global stagePartDict TO lexicon().      // lists parts per stage
-    global stageEngineDict TO lexicon().    // lists engines per stage
-    global rawDict TO lexicon().            // lists stages with mass[0], drymass[1], ISP[2], F[3], M°[4] and engines[5] (list)
-    global deltaVDict TO lexicon().         // lists stages with deltaV[0], TWR at start[1], TWR at the end[2] and whole mass[3]
+    GLOBAL stagePartDict TO lexicon().      // lists parts per stage
+    GLOBAL stageEngineDict TO lexicon().    // lists engines per stage
+    GLOBAL rawDict TO lexicon().            // lists stages with mass[0], drymass[1], ISP[2], F[3], M°[4] and engines[5] (list)
+    GLOBAL deltaVDict TO lexicon().         // lists stages with deltaV[0], TWR at start[1], TWR at the end[2] and whole mass[3]
 
     LOCAL highStage TO 0.                   // the highest stage in the ship
 
