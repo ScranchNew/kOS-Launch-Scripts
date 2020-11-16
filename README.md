@@ -1,4 +1,4 @@
-# kOS---Scripts
+# kOS-Launch-Scripts
 
 ## Installation
 

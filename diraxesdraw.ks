@@ -1,3 +1,5 @@
+@LAZYGLOBAL OFF.
+
 //KOS
 // diraxesdraw - Draw the XYZ axes of a given direction (rotation).
 //
@@ -8,11 +10,11 @@
 declare parameter dir, baseColor, scale, label.
 
 IF (DEFINED draws) = False {
-  SET draws TO list().
+  GLOBAL draws TO list().
 }
 
 draws:add(list()).
-set colorOffset to 0.3.
+LOCAL colorOffset to 0.3.
 draws[draws:length-1]:ADD(
   VECDRAWARGS(
     V(0,0,0), dir*V(1,0,0),
