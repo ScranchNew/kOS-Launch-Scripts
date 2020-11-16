@@ -41,7 +41,7 @@ function s_Layout {
         CLEARSCREEN.
         SET TERMINAL:HEIGHT TO 40.
         SET TERMINAL:WIDTH TO 80.
-        SET TERMINAL:CHARHEIGHT TO 8.
+        SET TERMINAL:CHARHEIGHT TO 12.
 
         PRINT "Mission Log:" AT (0,0).
         PRINT "Mission:" AT (Ic-1,Mil-1).
@@ -422,8 +422,6 @@ function s_Info_Clear {
     }
 
     // Prints empty strings to all information fields
-    LOCAL l TO Il.
-
     PRINT "":PADRIGHT(30) AT (Ic,spl).
     PRINT "":PADRIGHT(30) AT (Ic,stl).
 
@@ -870,7 +868,7 @@ function c_Orb_Vel {
     IF pNode2 = 0 {SET pNode2 TO PERIAPSIS.}
     IF pAlt = 0 {SET pAlt TO ALTITUDE.}
 
-    LOCAL pAlt TO pAlt + pBody:RADIUS*goalPos.
+    SET pAlt TO pAlt + pBody:RADIUS*goalPos.
 
     LOCAL SMA TO (pNode1+pNode2)/2+pBody:RADIUS*goalPos.
     RETURN SQRT(pBody:MU*(2/pAlt-1/SMA)).
@@ -892,16 +890,14 @@ function c_Simple_Man {
     LOCK THROTTLE TO 0.
 
     LOCAL burnPoint TO APOAPSIS.
-    LOCAL esta is 0.
+    LOCAL LOCK esta TO ETA:APOAPSIS.
+
+    LOCAL vdiff TO c_Orb_Vel(0,x2,burnPoint,burnPoint) - c_Orb_Vel(0,0,0,burnPoint).
 
     IF x1 <> 1 {
         SET burnPoint TO PERIAPSIS.
         LOCAL LOCK esta TO ETA:PERIAPSIS.
-    } ELSE {
-        LOCAL LOCK esta TO ETA:APOAPSIS.
     }
-
-    LOCAL vdiff TO c_Orb_Vel(0,x2,burnPoint,burnPoint) - c_Orb_Vel(0,0,0,burnPoint).
 
     LOCAL burnNode is Node(TIME:SECONDS+esta,0,0,vdiff).
     RETURN burnNode.
@@ -985,10 +981,10 @@ function c_Orbit_Vector {
 // and a forward vector perpendicular to both using the solarprimevector as x-axis and north as z-axis.
 
 // !!Warning this is using a right-handed coordinate system!!
-    DECLARE Parameter orbit.
+    DECLARE Parameter orbit_ref.
     
-    LOCAL inc TO ref:INCLINATION.
-    LOCAL omg TO ref:LAN.
+    LOCAL inc TO orbit_ref:INCLINATION.
+    LOCAL omg TO orbit_ref:LAN.
     LOCAL v_n TO v(SIN(inc)*SIN(omg),-SIN(inc)*COS(omg),COS(inc)).
     LOCAL v_Lan TO v(COS(omg), SIN(omg),0).
     LOCAL v_Forw TO v(-SIN(omg)*COS(inc), COS(omg)*COS(inc),SIN(inc)).
@@ -1478,10 +1474,8 @@ function p_Launch {
     // Start the steering
     LOCK STEERING TO HEADING(90-Linc,Lang).
 
-    LOCAL rIncl TO 0.   // The actual inclination
-    IF pInc >= 0 {
-        LOCAL LOCK rIncl TO ORBIT:INCLINATION.
-    } ELSE {
+    LOCAL LOCK rIncl TO ORBIT:INCLINATION.   // The actual inclination
+    IF pInc < 0 {
         LOCAL LOCK rIncl TO -ORBIT:INCLINATION.
     }
 
