@@ -44,18 +44,13 @@ function parseDeltaV {
     }
 
     // To get the engine thrust kOS has to shortly activate every engine.
-    LOCAL quietEng TO False.        // temporary flag if the engine was off before starting this script
     LOCK throttle TO 0.             // Stops all engines while measuring deltaV
+
 
     FOR stageNum in stageEngineDict:KEYS
     {
         FOR eng in stageEngineDict[stageNum]
         {
-            IF eng:ignition = False
-            {
-                SET quietEng TO TRUE.
-                eng:activate.
-            }
             // This part uses how the stage number for each part is listed in KSP to get all active engines (and their thrust/isp/etc) for each stage
             // This also accounts for asparagus staging
 
@@ -68,20 +63,14 @@ function parseDeltaV {
             FOR relevStage in Range(minStage, maxStage + 1)
             {
                 // Sums up the thrust per ISP
-                SET rawDict[relevStage][2] TO rawDict[relevStage][2] + eng:availablethrustat(pressure)/eng:ispat(pressure).
+                SET rawDict[relevStage][2] TO rawDict[relevStage][2] + eng:possiblethrustat(pressure)/eng:ispat(pressure).
                 // Sums up the thrust
-                SET rawDict[relevStage][3] TO rawDict[relevStage][3] + eng:availablethrustat(pressure).
+                SET rawDict[relevStage][3] TO rawDict[relevStage][3] + eng:possiblethrustat(pressure).
                 // Sums up the massflow
-                SET rawDict[relevStage][4] TO rawDict[relevStage][4] + eng:availablethrustat(pressure)/(eng:ispat(pressure) * 9.81).
+                SET rawDict[relevStage][4] TO rawDict[relevStage][4] + eng:possiblethrustat(pressure)/(eng:ispat(pressure) * 9.81).
                 // Adds all relevant engines
                 rawDict[relevStage][5]:add(eng).
             }
-            IF quietEng
-            {
-                eng:shutdown.
-                SET quietEng to False.
-            }
-            
         }
     }
     FOR stageNum in rawDict:KEYS        // Gets the mean isp per stage
