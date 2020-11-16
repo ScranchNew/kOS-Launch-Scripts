@@ -556,6 +556,7 @@ function a_Check_Target {
                     //          2: Dockingport
                     //          4: Body
                     //          8: rendevouzable
+                    //         16: Orbit
 
     IF (DEFINED layoutDone) = False 
     {
@@ -616,7 +617,7 @@ function a_Check_Target {
         RETURN False.
     }
     IF targ:TYPENAME <> "VESSEL" AND targ:TYPENAME <> "BODY" AND targ:SHIP:TYPENAME <> "VESSEL" AND cRen {
-        s_Status("Error: Target not ORBITABLE").
+        s_Status("Error: Target not RENDEVOUZABLE").
         RETURN False.
     }
     IF targ:name:contains("Sun") AND cRen {
@@ -2437,10 +2438,17 @@ function p_Insertion {
     s_Sub_Prog("p_Insertion").
 
     s_Log("Finalizing orbit").
-    p_Orb_Burn(c_Simple_Man(0,ap)).
     p_Orb_Burn(c_Simple_Man(1,pe)).
+    p_Orb_Burn(c_Simple_Man(0,ap)).
 }
 
+function p_Land_vacum {
+// TODO
+// Lands your ship engine first at some given coordinates
+    DECLARE Parameter Long TO 0, Lat TO 0.
+        
+
+}
 
 // [QUIT] Always called last in a scrip. Closes everything.
 // _________________________________________________
