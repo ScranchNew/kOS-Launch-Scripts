@@ -41,7 +41,7 @@ function s_Layout {
         CLEARSCREEN.
         SET TERMINAL:HEIGHT TO 40.
         SET TERMINAL:WIDTH TO 80.
-        SET TERMINAL:CHARHEIGHT TO 12.
+        SET TERMINAL:CHARHEIGHT TO 10.
 
         PRINT "Mission Log:" AT (0,0).
         PRINT "Mission:" AT (Ic-1,Mil-1).
@@ -554,6 +554,7 @@ function a_Check_Target {
                     //          2: Dockingport
                     //          4: Body
                     //          8: rendevouzable
+                    //         16: Orbit
 
     IF (DEFINED layoutDone) = False 
     {
@@ -614,7 +615,7 @@ function a_Check_Target {
         RETURN False.
     }
     IF targ:TYPENAME <> "VESSEL" AND targ:TYPENAME <> "BODY" AND targ:SHIP:TYPENAME <> "VESSEL" AND cRen {
-        s_Status("Error: Target not ORBITABLE").
+        s_Status("Error: Target not RENDEVOUZABLE").
         RETURN False.
     }
     IF targ:name:contains("Sun") AND cRen {
@@ -651,7 +652,7 @@ function a_Prompt_Target {
             SET listString TO "Vessel".
             LIST targets IN targList.
             FOR targ in RANGE(0, targList:LENGTH) {
-                IF targList[counter]:type = "SpaceObject" {
+                IF targList[counter]:typename = "SpaceObject" {
                     targList:REMOVE(counter).
                 } ELSE {
                     SET counter TO counter + 1.
@@ -890,13 +891,23 @@ function c_Simple_Man {
     LOCK THROTTLE TO 0.
 
     LOCAL burnPoint TO APOAPSIS.
+<<<<<<< HEAD
+=======
     LOCAL LOCK esta TO ETA:APOAPSIS.
 
     LOCAL vdiff TO c_Orb_Vel(0,x2,burnPoint,burnPoint) - c_Orb_Vel(0,0,0,burnPoint).
+>>>>>>> 0fa1e7ef8c3eb4c9cc2610828ab6b79902ad266e
 
+    LOCAL esta is 0.
     IF x1 <> 1 {
         SET burnPoint TO PERIAPSIS.
+<<<<<<< HEAD
+        LOCK esta TO ETA:PERIAPSIS.
+    } ELSE {
+        LOCK esta TO ETA:APOAPSIS.
+=======
         LOCAL LOCK esta TO ETA:PERIAPSIS.
+>>>>>>> 0fa1e7ef8c3eb4c9cc2610828ab6b79902ad266e
     }
 
     LOCAL burnNode is Node(TIME:SECONDS+esta,0,0,vdiff).
@@ -1397,7 +1408,7 @@ function p_Orb_Burn {
 
 function p_Launch {
 // launches into a circular with a given apoapsis, periapsis and inclination
-    DECLARE Parameter pAlt1 TO 150000, pAlt2 TO pAlt1, pInc TO 0.
+    DECLARE Parameter pAlt1 TO 100000, pAlt2 TO pAlt1, pInc TO 0.
             //pAlt:int	,orbit height
             //pInc:int	,orbit inclination
 
@@ -1474,9 +1485,17 @@ function p_Launch {
     // Start the steering
     LOCK STEERING TO HEADING(90-Linc,Lang).
 
+<<<<<<< HEAD
+    GLOBAL rIncl TO 0.   // The actual inclination
+    IF pInc >= 0 {
+        LOCK rIncl TO ORBIT:INCLINATION.
+    } ELSE {
+        LOCK rIncl TO -ORBIT:INCLINATION.
+=======
     LOCAL LOCK rIncl TO ORBIT:INCLINATION.   // The actual inclination
     IF pInc < 0 {
         LOCAL LOCK rIncl TO -ORBIT:INCLINATION.
+>>>>>>> 0fa1e7ef8c3eb4c9cc2610828ab6b79902ad266e
     }
 
     // After reaching the desired inclination this PID-LOOP keeps it there by updating Linc.
@@ -2274,8 +2293,15 @@ function p_Dock {
 
 function p_Insertion {
 // Perform an orbital insertion after the next SOI-Change
-    DECLARE Parameter Ap TO 150000, Pe TO Ap, inc TO 0, aerobrake TO False.
-                    //AP: New Apoapsis after the full insertion, Pe: New Periapsis after the full insertion, inc: New inclination after the full insertion.
+    DECLARE Parameter Alt1 TO 100000, Alt2 TO Alt1, inc TO 0, targ TO 0,aerobrake TO False.
+        // Alt1: New first node after the full insertion (Ap or Pe), 
+        // Alt2: New second node after the full insertion, 
+        // inc: New inclination after the full insertion.
+        // targ: If not 0, the inclination will be relative to a given target
+        // aerobrake: TODO
+
+    LOCAL Ap TO max(Alt1, Alt2).
+    LOCAL Pe TO min(Alt1, Alt2).
 
     s_Sub_Prog("p_Insertion").
     IF NOT "ORBITING ESCAPING":CONTAINS(SHIP:STATUS){
@@ -2286,10 +2312,28 @@ function p_Insertion {
         s_Status("Wait for encounter").
         a_Warp_To(ETA:TRANSITION + 120).
     }
-    LOCAL pe_insertion TO BODY:ATM:HEIGHT + 30000.
+
+    s_Status("Checking for Errors").
+
+    IF targ <> 0 
+    {
+        IF NOT "Vessel,Body,SpaceObject":CONTAINS(targ:typename){
+            SET targ TO 0.
+        }
+        SET targ TO a_Check_Target(targ, 1+4+8).
+        UNTIL targ:TYPENAME <> "BOOLEAN" {
+            IF targ:TYPENAME = "BOOLEAN" {
+                SET targ TO a_Prompt_Target(True).
+            }
+            SET targ TO a_Check_Target(targ, 1+4+8).
+        }
+    }
+
+    LOCAL pe_insertion TO min(BODY:RADIUS/6, BODY:ATM:HEIGHT + 30000).
     LOCAL ap_insertion TO APOAPSIS + PERIAPSIS - pe_insertion.
 
-    IF ap_insertion < pe_insertion AND ap_insertion + BODY:RADIUS > 0{
+    IF ap_insertion < pe_insertion AND ap_insertion + BODY:RADIUS > 0
+    {
         s_Status("Orbit to low").
         Return False.
     }
@@ -2334,7 +2378,7 @@ function p_Insertion {
     p_Orb_Burn(adjustment_burn).
     s_Sub_Prog("p_Insertion").
 
-    LOCAL inc_nodes TO c_AnDn_Anomaly(OBT,0).
+    LOCAL inc_nodes TO c_AnDn_Anomaly(OBT, targ).
     LOCAL insertion_node TO inc_nodes["AN"].
     LOCAL inc_insertion TO inc_nodes["relInc"] - ABS(inc).
     IF ABS(m_Clamp(inc_nodes["DN"][0], 180, -180)) < ABS(m_Clamp(insertion_node[0], 180, -180)) {
@@ -2358,7 +2402,7 @@ function p_Insertion {
         p_Orb_Burn(first_insertion).
         s_Sub_Prog("p_Insertion").
 
-        SET inc_nodes TO c_AnDn_Anomaly(OBT,0).
+        SET inc_nodes TO c_AnDn_Anomaly(OBT, targ).
         SET insertion_node TO inc_nodes["AN"].
         SET inc_insertion TO inc_nodes["relInc"] - ABS(inc).
         IF ABS(m_Clamp(inc_nodes["DN"][0], 180, -180)) < ABS(m_Clamp(insertion_node[0], 180, -180)) {
@@ -2406,10 +2450,17 @@ function p_Insertion {
     s_Sub_Prog("p_Insertion").
 
     s_Log("Finalizing orbit").
-    p_Orb_Burn(c_Simple_Man(0,ap)).
     p_Orb_Burn(c_Simple_Man(1,pe)).
+    p_Orb_Burn(c_Simple_Man(0,ap)).
 }
 
+function p_Land_vacum {
+// TODO
+// Lands your ship engine first at some given coordinates
+    DECLARE Parameter Long TO 0, Lat TO 0.
+        
+
+}
 
 // [QUIT] Always called last in a scrip. Closes everything.
 // _________________________________________________

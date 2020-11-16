@@ -5,9 +5,9 @@
     runoncepath("libraries/LaunchLib").
     runoncepath("libraries/DeltaVLib").
     runoncepath("libraries/DockLib").
-    LOCAL testList TO list().
-    LIST bodies in testList.
-    LOCAL char TO s_choose_from_list("Character",testList).
-    s_Log(char).
+    s_Mission("To Minmus at 300km").
+    p_Launch().
+    p_Direct_Rendevouz(Minmus).
+    p_Insertion(300000).
     Quit().
 }
