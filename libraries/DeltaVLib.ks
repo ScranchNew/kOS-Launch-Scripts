@@ -67,6 +67,11 @@ function parseDeltaV {
 
             FOR relevStage in Range(minStage, maxStage + 1)
             {
+                If rawDict:haskey(relevStage) = FALSE {
+                    SET stagePartDict[relevStage] TO list().
+                    SET rawDict[relevStage] TO list(0,0,0,0,0,list()).
+                    SET highStage to max(highStage, relevStage).
+                }
                 // Sums up the thrust per ISP
                 SET rawDict[relevStage][2] TO rawDict[relevStage][2] + eng:availablethrustat(pressure)/eng:ispat(pressure).
                 // Sums up the thrust
