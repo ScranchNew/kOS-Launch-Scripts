@@ -1126,8 +1126,12 @@ function c_Time_from_Mean {
 
 function c_Mean_An_from_Time {
 // calculates the time it takes to pass a given amount of mean anomaly given the orbital period
-    DECLARE Parameter dTime, priod TO OBT:PERIOD.
+    DECLARE Parameter dTime, Orb TO OBT, priod TO False.
             // dTime: the amount of time    // priod: the orbital period
+    IF Orb:TYPENAME = "Orbit" {
+        IF False = priod {SET priod TO Orb:PERIOD.}
+    }
+
     RETURN(360 * dTime / priod).
 }
 
@@ -1214,7 +1218,7 @@ function c_Tru_After_t {
 
     DECLARE Parameter Orb TO OBT, t TO 0.
 
-    LOCAL Mean TO c_Mean_An_from_Tru(Orb:TRUEANOMALY, Orb) + c_Mean_An_from_Time(t, Orb:PERIOD).
+    LOCAL Mean TO c_Mean_An_from_Tru(Orb:TRUEANOMALY, Orb) + c_Mean_An_from_Time(t, Orb).
     LOCAL Nu TO c_Tru_An_from_Mean(Mean, Orb).
 
     RETURN Nu.
@@ -1335,18 +1339,45 @@ function c_Equ_TruAn {
 
 function c_Phase_Angle_From_Time {
 // calculates the phase angle between these two orbits after time t
+// Returns a list of [0]: the phase angle
+//                   [1]: the true anomaly until that point
 
-    DECLARE Parameter orb1, orb2, t.
+    DECLARE Parameter orb1, orb2, t TO 0.
 
-    LOCAL Nu_1 TO c_Tru_After_t(orb1, t).
+    LOCAL Nu_1 TO orb1:TRUEANOMALY.
+    LOCAL Nu_2 TO orb2:TRUEANOMALY.
+    IF t <> 0 {
+        SET Nu_1 TO c_Tru_After_t(orb1, t).
+        SET Nu_2 TO c_Tru_After_t(orb2, t).
+    }
     LOCAL Nu_1_in_2 TO c_Equ_TruAn(Nu_1, orb1, orb2).
-
-    LOCAL Nu_2 TO c_Tru_After_t(orb2, t).
 
     // the phase angle at the orbit intersection
     LOCAL PhaseAngle TO m_Clamp(Nu_2 - Nu_1_in_2, 360).
 
-    RETURN m_Clamp(PhaseAngle, 360).
+    RETURN list(m_Clamp(PhaseAngle, 360), Nu_1 - orb1:TRUEANOMALY).
+}
+
+function c_Phase_Angle_From_Nu {
+// calculates the phase angle between these two orbits after a given amount of true anomaly in orbit 1
+// Returns a list of [0]: the phase angle
+//                   [1]: the time until that point
+
+    DECLARE Parameter orb1, orb2, Nu TO 0.
+
+    LOCAL deltaT TO 0.
+    LOCAL Nu_1 TO orb1:TRUEANOMALY + Nu.
+    LOCAL Nu_1_in_2 TO c_Equ_TruAn(Nu_1, orb1, orb2).
+    LOCAL Nu_2 TO orb2:TRUEANOMALY.
+    IF Nu <> 0 {
+        SET deltaT TO c_Time_from_Mean(c_Mean_An_from_Tru(Nu_1) - c_Mean_An_from_Tru()).
+        SET Nu_2 TO c_Tru_After_t(orb2, deltaT).
+    }
+
+    // the phase angle at the orbit intersection
+    LOCAL PhaseAngle TO m_Clamp(Nu_2 - Nu_1_in_2, 360).
+
+    RETURN list(m_Clamp(PhaseAngle, 360), deltaT).
 }
 
 function c_Safe_Orientation {
@@ -1796,14 +1827,13 @@ function p_Slow_Rendevouz {
 
     s_Status("Calc. wait burn").
 
-    LOCAL myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
-    SET timeToNode TO c_Time_from_Mean(c_Mean_An_from_Tru(m_clamp(myNuAtNode - OBT:TRUEANOMALY, 360), OBT)).
-
-    LOCAL tarMeanWhenAtNode TO c_Mean_An_from_Tru(targObt:TRUEANOMALY, targObt) + c_Mean_An_from_Time(timeToNode, targObt:PERIOD).
-    LOCAL tarNuWhenAtNode TO c_Tru_An_from_Mean(tarMeanWhenAtNode, targObt).
-
     // the phase angle at the orbit intersection
-    LOCAL tarDeltaNuAtNode TO m_Clamp(tarNuWhenAtNode - tarNode[2] + anomalyOffset, 360).
+    LOCAL myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+    LOCAL phaseAngle TO c_Phase_Angle_From_Nu(OBT, targObt, m_Clamp(myNuAtNode - OBT:TRUEANOMALY, 360)).
+    SET   timeToNode TO phaseAngle[1].
+
+    LOCAL tarDeltaNuAtNode TO m_Clamp(phaseAngle[0] + anomalyOffset, 360).
+
     LOCAL targPosStart TO tarDeltaNuAtNode / 360.
     LOCAL waitMyOrbNum TO 0.
     LOCAL targPosNew TO 0.
@@ -1888,15 +1918,12 @@ function p_Slow_Rendevouz {
         }
         SET waitMyOrbNum TO waitMyOrbNum - 1.
 
-        SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
-        SET timeToNode TO c_Time_from_Mean(m_clamp(c_Mean_An_from_Tru(myNuAtNode) - c_Mean_An_from_Tru(), 360)).
-
-        SET tarMeanWhenAtNode TO c_Mean_An_from_Tru(targObt:TRUEANOMALY, targObt) + c_Mean_An_from_Time(timeToNode, targObt:PERIOD).
-        SET tarNuWhenAtNode TO c_Tru_An_from_Mean(tarMeanWhenAtNode, targObt).
-
         // the phase angle at the orbit intersection
-        SET tarDeltaNuAtNode TO m_Clamp(tarNuWhenAtNode - tarNode[2] + anomalyOffset, 360).
-        SET targPosStart TO tarDeltaNuAtNode / 360.
+        SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+        SET phaseAngle TO c_Phase_Angle_From_Nu(OBT, targObt, m_Clamp(myNuAtNode - OBT:TRUEANOMALY, 360)).
+        SET timeToNode TO phaseAngle[1].
+
+        SET tarDeltaNuAtNode TO m_Clamp(phaseAngle[0] + anomalyOffset, 360).
 
         LOCAL minPosNew TO waitMyOrbNum * MIN(1, OBT:PERIOD / targObt:PERIOD)*0.95 + targPosStart.
         SET targPosNew TO FLOOR(minPosNew) + 1.
