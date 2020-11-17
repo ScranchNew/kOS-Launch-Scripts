@@ -966,7 +966,7 @@ function c_Inc_Change {
         SET ANnext TO False.
     }
     LOCAL myVNode TO c_Orbit_Velocity_Vector(next_Node[0]).
-    LOCAL deltTime TO c_Time_from_Mean_An(m_Clamp(next_Node[2]-c_MeanAN(),360)).
+    LOCAL deltTime TO c_Time_from_Mean(m_Clamp(next_Node[2]-c_MeanAN(),360)).
     IF mode = 0 {
         IF ANnext {
             SET inc TO ABS(myANDN["relInc"]) - inc.
@@ -1117,22 +1117,32 @@ function c_AnDn_Anomaly {
     RETURN(orbNodes).
 }
 
-function c_Time_from_Mean_An {
+function c_Time_from_Mean {
 // calculates the time it takes to pass a given amount of mean anomaly given the orbital period
     DECLARE Parameter meaAn, priod TO OBT:PERIOD.
             // meaAn: the amount of mean anomaly    // priod: the orbital period
     RETURN(priod * meaAn/360).
 }
 
+function c_Mean_An_from_Time {
+// calculates the time it takes to pass a given amount of mean anomaly given the orbital period
+    DECLARE Parameter dTime, priod TO OBT:PERIOD.
+            // dTime: the amount of time    // priod: the orbital period
+    RETURN(360 * dTime / priod).
+}
+
 function c_Mean_An_from_Tru {
 // calculates the Mean Anomaly from the True one
-    DECLARE Parameter phi, ec TO OBT:ECCENTRICITY.
+    DECLARE Parameter Nu TO OBT:TRUEANOMALY, Orb TO OBT.
+
+    LOCAL ec TO Orb:ECCENTRICITY.
+
     IF ec < 1 {
-        LOCAL E TO 2 * ARCTAN(TAN(phi/2) * SQRT((1- ec)/(1 + ec))).
+        LOCAL E TO 2 * ARCTAN(TAN(Nu/2) * SQRT((1- ec)/(1 + ec))).
         RETURN m_Clamp((m_Rad_to_Deg(m_Deg_to_Rad(E) - ec * SIN(E))), 360).
     } ELSE {
-        LOCAL E TO m_Rad_to_Deg(m_ARCCOSH((ec + COS(phi))/(1 + ec * COS(phi)))).
-        IF m_Clamp(phi, 180, -180) < 0 {
+        LOCAL E TO m_Rad_to_Deg(m_ARCCOSH((ec + COS(Nu))/(1 + ec * COS(Nu)))).
+        IF m_Clamp(Nu, 180, -180) < 0 {
             SET E TO -E.
         }
         RETURN m_Rad_to_Deg(ec * m_SINH(m_Deg_to_Rad(E)) - m_Deg_to_Rad(E)).
@@ -1144,44 +1154,70 @@ function c_Tru_An_from_Mean {
 // As this can't be analytically solved, it is only an approximation and takes a good bit of processing power to make exact.
 // I suggest raising the allowed operations per tick for kOS.
 
-    DECLARE Parameter M, ec TO OBT:ECCENTRICITY.
+    DECLARE Parameter M, Orb TO OBT.
+
     SET M TO m_Clamp(M, 180, -180).
+    LOCAL ec TO Orb:ECCENTRICITY.
 
     LOCAL err TO 180*ec^3.
-    LOCAL phi_m TO M + 180/CONSTANT:PI*(2*ec-0.25*ec^3)*sin(M) + 180/CONSTANT:PI*(1.25*ec^2)*sin(2*M) + 180/CONSTANT:PI*(13/12*ec^3)*sin(3*M).
-    LOCAL phi_0 TO 0.
-    LOCAL phi_1 TO 0.
+    // Initialized with a good approximation
+    LOCAL Nu_m TO M + 180/CONSTANT:PI*(2*ec-0.25*ec^3)*sin(M) + 180/CONSTANT:PI*(1.25*ec^2)*sin(2*M) + 180/CONSTANT:PI*(13/12*ec^3)*sin(3*M).
+    LOCAL Nu_0 TO 0.
+    LOCAL Nu_1 TO 0.
     IF M > 0 {
-        SET phi_0 TO MAX(0, phi_m - err).
-        SET phi_1 TO MIN(180, phi_m + err).
+        SET Nu_0 TO MAX(0, Nu_m - err).
+        SET Nu_1 TO MIN(180, Nu_m + err).
     } ELSE {
-        SET phi_0 TO MAX(-180, phi_m - err).
-        SET phi_1 TO MIN(0, phi_m + err).
+        SET Nu_0 TO MAX(-180, Nu_m - err).
+        SET Nu_1 TO MIN(0, Nu_m + err).
     }
-    LOCAL M_m TO m_Clamp(c_Mean_An_from_Tru(phi_m, ec), 180, -180).
+    LOCAL M_m TO m_Clamp(c_Mean_An_from_Tru(Nu_m, Orb), 180, -180).
     UNTIL ABS(M_m - M) < 0.001 {
         IF M_m > M {
-            SET phi_1 TO phi_m.
-            SET phi_m TO (phi_0 + phi_1)/2.
+            SET Nu_1 TO Nu_m.
+            SET Nu_m TO (Nu_0 + Nu_1)/2.
         } ELSE {
-            SET phi_0 TO phi_m.
-            SET phi_m TO (phi_0 + phi_1)/2.
+            SET Nu_0 TO Nu_m.
+            SET Nu_m TO (Nu_0 + Nu_1)/2.
         }
-        SET M_m TO m_Clamp(c_Mean_An_from_Tru(phi_m, ec), -180, 180).
+        SET M_m TO m_Clamp(c_Mean_An_from_Tru(Nu_m, Orb), -180, 180).
     }
-    RETURN m_Clamp(phi_m,360).
+    RETURN m_Clamp(Nu_m,360).
 }
 
 function c_r_from_Tru {
 // calculates the height over the BODY center from the true anomaly
-    DECLARE Parameter phi, ec TO OBT:ECCENTRICITY, sma TO OBT:SEMIMAJORAXIS.
-    RETURN sma * (1 - ec^2) / (1 + ec*COS(phi)).
+    DECLARE Parameter Nu, Orb TO OBT, ec TO False, sma TO False.
+
+    IF Orb:TYPENAME = "Orbit" {
+        IF False = ec   {SET ec TO Orb:ECCENTRICITY.}
+        IF False = sma  {SET sma TO Orb:SEMIMAJORAXIS.}
+    }
+
+    RETURN sma * (1 - ec^2) / (1 + ec*COS(Nu)).
 }
 
 function c_Tru_from_r {
 // calculates the true anomaly from the height over the center of the BODY
-    DECLARE Parameter r, ec TO OBT:ECCENTRICITY, sma TO OBT:SEMIMAJORAXIS.
+    DECLARE Parameter r, Orb TO OBT, ec TO False, sma TO False.
+
+    IF Orb:TYPENAME = "Orbit" {
+        IF False = ec   {SET ec TO Orb:ECCENTRICITY.}
+        IF False = sma  {SET sma TO Orb:SEMIMAJORAXIS.}
+    }
+
     RETURN 360 - ARCCOS((sma*(1 - ec^2) - r)/(ec*r)).
+}
+
+function c_Tru_After_t {
+// calculates the true anomaly after time t passes
+
+    DECLARE Parameter Orb TO OBT, t TO 0.
+
+    LOCAL Mean TO c_Mean_An_from_Tru(Orb:TRUEANOMALY, Orb) + c_Mean_An_from_Time(t, Orb:PERIOD).
+    LOCAL Nu TO c_Tru_An_from_Mean(Mean, Orb).
+
+    RETURN Nu.
 }
 
 function c_Orbit_Pos {
@@ -1190,27 +1226,19 @@ function c_Orbit_Pos {
 
 // !!Warning this is using a right-handed coordinate system!!
 
-    DECLARE Parameter orb TO False,
-                      phi TO OBT:TRUEANOMALY, 
-                      argPe TO OBT:ARGUMENTOFPERIAPSIS, 
-                      lan TO OBT:LAN, 
-                      ec TO OBT:ECCENTRICITY, 
-                      inc TO OBT:INCLINATION, 
-                      sma TO OBT:SEMIMAJORAXIS.
+    DECLARE Parameter Orb TO OBT, Nu TO 0, argPe TO 0, lan TO 0, inc TO 0, ec TO False, sma TO False.
 
-    IF orb:TYPENAME = "Orbit" {
-        SET phi TO orb:TRUEANOMALY.
-        SET argPe TO orb:ARGUMENTOFPERIAPSIS.
-        SET lan TO orb:LAN.
-        SET ec TO orb:ECCENTRICITY.
-        SET inc TO orb:INCLINATION.
-        SET sma TO orb:SEMIMAJORAXIS.
+    IF Orb:TYPENAME = "Orbit" {
+        IF False = Nu       {SET Nu TO Orb:TRUEANOMALY.}
+        IF False = argPe    {SET argPe TO Orb:ARGUMENTOFPERIAPSIS.}
+        IF False = lan      {SET lan TO Orb:LAN.}
+        IF False = inc      {SET inc TO Orb:INCLINATION..}
     }
     
-    LOCAL r TO c_r_from_Tru(phi, ec, sma).
-    RETURN V((-sin(lan)*cos(inc)*sin(phi + argPe)+cos(lan)*cos(phi + argPe))*r, 
-             (sin(lan)*cos(phi + argPe)+cos(lan)*cos(inc)*sin(phi + argPe))*r,
-              sin(inc)*sin(phi + argPe)*r).
+    LOCAL r TO c_r_from_Tru(Nu, Orb, ec, sma).
+    RETURN V((-sin(lan)*cos(inc)*sin(Nu + argPe)+cos(lan)*cos(Nu + argPe))*r, 
+             (sin(lan)*cos(Nu + argPe)+cos(lan)*cos(inc)*sin(Nu + argPe))*r,
+              sin(inc)*sin(Nu + argPe)*r).
 }
 
 function c_Orbit_Period {
@@ -1224,7 +1252,7 @@ function c_Closest_Approach {
 // As this can't be analytically solved it is only an approximation and can take a lot of processing power (Uses "c_Tru_An_from_Mean()" a lot).
 // I suggest raising the allowed operations per tick for kOS.
 
-    DECLARE Parameter orb1, orb2, anomalyOffset TO 0, phi_min TO 0, delt_phi TO 360, phi_start TO orb1:TRUEANOMALY, epoch_start TO TIME:SECONDS.
+    DECLARE Parameter orb1, orb2, anomalyOffset TO 0, Nu_min TO 0, delt_Nu TO 360, Nu_start TO orb1:TRUEANOMALY, epoch_start TO TIME:SECONDS.
     // It RETURNs a LIST of [n]: Encounter-lists with each having:
         // [0]: The distance at Encounter
         // [1]: Mean Anomaly of orbit 1 at Encounter
@@ -1240,15 +1268,15 @@ function c_Closest_Approach {
 
     LOCAL distList TO LIST().
     FOR i IN RANGE(0,div) {
-        LOCAL phi TO phi_min + i*delt_phi/div.
-        LOCAL phi_1 TO m_Clamp(phi_start + phi, 360).
-        LOCAL pos_1 TO c_Orbit_Pos(False, phi_1, orb1:ARGUMENTOFPERIAPSIS, orb1:LAN, orb1:ECCENTRICITY, orb1:INCLINATION, orb1:SEMIMAJORAXIS).
-        LOCAL M_1 TO c_Mean_An_from_Tru(phi_1, orb1:ECCENTRICITY).
+        LOCAL Nu TO Nu_min + i*delt_Nu/div.
+        LOCAL Nu_1 TO m_Clamp(Nu_start + Nu, 360).
+        LOCAL pos_1 TO c_Orbit_Pos(orb1, Nu_1).
+        LOCAL M_1 TO c_Mean_An_from_Tru(Nu_1, orb1).
         LOCAL T TO m_Clamp(M_1 - M1_0, 360) * orb1:PERIOD / 360.
         LOCAL M_2 TO m_Clamp(M2_0 + T * 360 / orb2:PERIOD, 360).
-        LOCAL phi_2 TO c_Tru_An_from_Mean(M_2, orb2:ECCENTRICITY).
-        LOCAL pos_2 TO c_Orbit_Pos(False, phi_2, orb2:ARGUMENTOFPERIAPSIS, orb2:LAN, orb2:ECCENTRICITY, orb2:INCLINATION, orb2:SEMIMAJORAXIS).
-        distList:ADD(LIST((pos_1 - pos_2):MAG, M_2, phi_2)).
+        LOCAL Nu_2 TO c_Tru_An_from_Mean(M_2, orb2).
+        LOCAL pos_2 TO c_Orbit_Pos(orb2, Nu_2).
+        distList:ADD(LIST((pos_1 - pos_2):MAG, M_2, Nu_2)).
     }
     LOCAL retList TO LIST().
     LOCAL lastDist TO distList[div - 1][0].
@@ -1260,13 +1288,13 @@ function c_Closest_Approach {
             SET nextDist TO distList[i+1][0].
         }
         IF distList[i][0] < lastDist AND distList[i][0] < nextDist {
-            LOCAL phiClose TO phi_min + i * delt_phi/div.
-            LOCAL rClose TO c_r_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY, orb1:SEMIMAJORAXIS).
-            IF rClose * delt_phi * CONSTANT:PI/(180*div) < 100 {
-                LOCAL M_1 TO c_Mean_An_from_Tru(phiClose + phi_start, orb1:ECCENTRICITY).
-                retList:ADD(LIST(distList[i][0], M_1, phiClose + phi_start, distList[i][1], distList[i][2], rClose)).
+            LOCAL NuClose TO Nu_min + i * delt_Nu/div.
+            LOCAL rClose TO c_r_from_Tru(NuClose + Nu_start, orb1).
+            IF rClose * delt_Nu * CONSTANT:PI/(180*div) < 20 {
+                LOCAL M_1 TO c_Mean_An_from_Tru(NuClose + Nu_start, orb1).
+                retList:ADD(LIST(distList[i][0], M_1, NuClose + Nu_start, distList[i][1], distList[i][2], rClose)).
             } ELSE {
-                LOCAL subRetList TO c_Closest_Approach(orb1, orb2, anomalyOffset, phiClose - delt_phi/div, 2*delt_phi/div, phi_start, epoch_start).
+                LOCAL subRetList TO c_Closest_Approach(orb1, orb2, anomalyOffset, NuClose - delt_Nu/div, 2*delt_Nu/div, Nu_start, epoch_start).
                 FOR Ret in subRetList {
                     retList:ADD(Ret).
                 }
@@ -1279,14 +1307,14 @@ function c_Closest_Approach {
 
 function c_MeanAN {
 // calculates the mean anomaly of an orbit a given time from now
-    DECLARE Parameter orb TO OBT, dTime TO 0.
+    DECLARE Parameter Orb TO OBT, dTime TO 0.
                     // orb: the orbit 
                     // dTime: time from now
     IF OBT:ECCENTRICITY >= 1 {
-        LOCAL phi TO orb:TRUEANOMALY.
-        RETURN c_Mean_An_from_Tru(phi) + SQRT((OBT:BODY:MU)/(-OBT:SEMIMAJORAXIS^3))*(dTime).
+        LOCAL Nu TO Orb:TRUEANOMALY.
+        RETURN c_Mean_An_from_Tru(Nu, Orb) + SQRT((OBT:BODY:MU)/(-OBT:SEMIMAJORAXIS^3))*(dTime).
     } ELSE {
-        RETURN m_Clamp(orb:MEANANOMALYATEPOCH + 360 * (TIME:SECONDS + dTime - orb:EPOCH) / orb:PERIOD, 360).
+        RETURN m_Clamp(Orb:MEANANOMALYATEPOCH + 360 * (TIME:SECONDS + dTime - Orb:EPOCH) / Orb:PERIOD, 360).
     }
 }
 
@@ -1294,17 +1322,31 @@ function c_Equ_TruAn {
 // calculates the True Anomaly for the second orbit where both positions have the same rotation around the z axis
 // useful for some kind of rendevouz calculations
 
-    DECLARE Parameter phi_1, orb1, orb2.
+    DECLARE Parameter Nu_1, orb1, orb2.
     LOCAL lan_1 TO orb1:LAN.
     LOCAL arPe_1 TO orb1:ARGUMENTOFPERIAPSIS.
     LOCAL lan_2 TO orb2:LAN.
     LOCAL arPe_2 TO orb2:ARGUMENTOFPERIAPSIS.
 
-    LOCAL phi_2 TO arctan(sin(phi_1+arPe_1+lan_1-lan_2)/cos(phi_1+arPe_1+lan_1-lan_2)).
-    IF cos(phi_1+arPe_1+lan_1-lan_2) < 0 {
-        SET phi_2 TO 180 + phi_2.
-    }
-    RETURN m_Clamp(phi_2 - arPe_2, 360).
+    LOCAL Nu_2 TO Nu_1 + arPe_1 + lan_1 - lan_2 - arPe_2.
+
+    RETURN m_Clamp(Nu_2, 360).
+}
+
+function c_Phase_Angle_From_Time {
+// calculates the phase angle between these two orbits after time t
+
+    DECLARE Parameter orb1, orb2, t.
+
+    LOCAL Nu_1 TO c_Tru_After_t(orb1, t).
+    LOCAL Nu_1_in_2 TO c_Equ_TruAn(Nu_1, orb1, orb2).
+
+    LOCAL Nu_2 TO c_Tru_After_t(orb2, t).
+
+    // the phase angle at the orbit intersection
+    LOCAL PhaseAngle TO m_Clamp(Nu_2 - Nu_1_in_2, 360).
+
+    RETURN m_Clamp(PhaseAngle, 360).
 }
 
 function c_Safe_Orientation {
@@ -1709,11 +1751,13 @@ function p_Slow_Rendevouz {
     }
 
     s_Status("Calc. transfer burn").
+    // First we go into a transfer orbit which connects both orbits at the ascending or descending node
 
     LOCAL myANDN TO c_AnDn_Anomaly(SHIP:OBT, targObt).         // AS and DEscending node from my orbit to target orbit
     LOCAL tarANDN TO c_AnDn_Anomaly(targObt, SHIP:OBT).        // AS and DEscending node from target orbit to my orbit
     LOCAL relInc TO myANDN["relInc"].
 
+    // If it uses the descending or ascending Node
     LOCAL useDE TO True.
     IF tarANDN["DN"][3] - myANDN["AN"][3] > tarANDN["AN"][3] - myANDN["DN"][3] {    // Burn so the transfer-orbit is as cicular as possible
         SET useDE TO False.
@@ -1730,33 +1774,41 @@ function p_Slow_Rendevouz {
     LOCAL vMyNode TO c_Orb_Vel(0, myNode[3], tarNode[3], myNode[3]).    // calculates parameter
     LOCAL vCurrentMyNode TO c_Orbit_Velocity_Vector(myNode[0]).
 
-    LOCAL earlyIncChange TO 0.                                          // if the target node is lower do an early inclinatino Change
+    LOCAL targetIsLower TO 0.      // if the target node is lower do an early inclinatino Change
     IF myNode[3] > tarNode[3] {
-        SET earlyIncChange TO 1.
+        SET targetIsLower TO 1.
     }
 
     LOCAL meanAnToNode TO m_Clamp(myNode[2] - c_MeanAN(), 360).
 
-    LOCAL timeToNode TO c_Time_from_Mean_An(meanAnToNode).
+    LOCAL timeToNode TO c_Time_from_Mean(meanAnToNode).
 
     s_Log("Calculated transfer maneuver").
 
-    LOCAL manNode TO c_Circ_Man(timeToNode, vCurrentMyNode, LIST(vMyNode, 0), -earlyIncChange * relInc).
+    // we only the inclination change at the high-point of the transfer
+    // that could be this burn or the next
+    LOCAL manNode TO c_Circ_Man(timeToNode, vCurrentMyNode, LIST(vMyNode, 0), targetIsLower * -relInc).
     p_Orb_Burn(manNode).
     s_Sub_Prog("p_Slow_Rendevouz").
 
+    // Now we sit in the transfer maneuver which connects the old and the target orbit at the ascending or descending node.
+    // Next we raise or lower the node not touching the target orbit to syncronize our position by waiting
+
     s_Status("Calc. wait burn").
 
-    SET timeToNode TO ETA:APOAPSIS + earlyIncChange * (ETA:PERIAPSIS - ETA:APOAPSIS).
-    LOCAL phiAtNode TO 180 - 180 * earlyIncChange.
-    LOCAL tarPhiOfNode TO c_Equ_TruAn(phiAtNode, OBT, targObt).
+    LOCAL myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+    SET timeToNode TO c_Time_from_Mean(c_Mean_An_from_Tru(m_clamp(myNuAtNode - OBT:TRUEANOMALY, 360), OBT)).
 
-    LOCAL tarMeanAnAtNode TO c_MeanAN(targObt, timeToNode).
-    LOCAL tarDeltAnAtNode TO m_Clamp(tarMeanAnAtNode + anomalyOffset - tarPhiOfNode, 360).
-    LOCAL targPosStart TO tarDeltAnAtNode / 360.
+    LOCAL tarMeanWhenAtNode TO c_Mean_An_from_Tru(targObt:TRUEANOMALY, targObt) + c_Mean_An_from_Time(timeToNode, targObt:PERIOD).
+    LOCAL tarNuWhenAtNode TO c_Tru_An_from_Mean(tarMeanWhenAtNode, targObt).
+
+    // the phase angle at the orbit intersection
+    LOCAL tarDeltaNuAtNode TO m_Clamp(tarNuWhenAtNode - tarNode[2] + anomalyOffset, 360).
+    LOCAL targPosStart TO tarDeltaNuAtNode / 360.
     LOCAL waitMyOrbNum TO 0.
     LOCAL targPosNew TO 0.
 
+    // Just using the space between the orbits for waiting
     UNTIL targPosNew OR waitMyOrbNum > 5
     {
         SET waitMyOrbNum TO waitMyOrbNum + 1.
@@ -1767,6 +1819,7 @@ function p_Slow_Rendevouz {
         }
     }
 
+    // Allow raising the wait orbit outside both orbits to archive up to 1.25 orbits of waiting per orbit
     IF waitMyOrbNum > 5 {
         SET waitMyOrbNum TO 0.
         SET targPosNew TO 0.
@@ -1781,24 +1834,28 @@ function p_Slow_Rendevouz {
         }
     }
 
-    s_Info_push("Wait for", waitMyOrbNum + " orbits").
-
     LOCAL waitPeriod TO (targPosNew - targPosStart) * targObt:PERIOD.
     LOCAL wait_orbit_period TO waitPeriod / waitMyOrbNum.
+
+    s_Info_push(LIST("Wait for",               "Phase Ang.",           "Final Ang."),
+                LIST(waitMyOrbNum + " orbits", tarDeltaNuAtNode + "°", targPosNew*360 + "°")).
+
+    // The Semi-Mayor-Axes of the starting Orbit, the waiting Orbit and the final Orbit
 
     LOCAL sma_0 TO OBT:SEMIMAJORAXIS.
     LOCAL sma_wait TO ((wait_orbit_period/(2*CONSTANT:PI))^2*BODY:MU)^(1/3).
     LOCAL sma_1 TO targObt:SEMIMAJORAXIS.
 
-    LOCAL r_wait TO BODY:RADIUS + APOAPSIS + earlyIncChange * (PERIAPSIS - APOAPSIS).
+    LOCAL r_wait TO BODY:RADIUS + tarNode[3].
 
     LOCAL ap_hohman TO MAX(r_wait, 2*sma_wait - r_wait).
     LOCAL pe_hohman TO MIN(r_wait, 2*sma_wait - r_wait).
 
+    // we split the inclination change between the waiting maneuver and the final speedmatch
+    // if the waiting maneuver goes most of the way it gets most of the inclination change and vice versa
     LOCAL x TO (sma_wait - sma_0) / (sma_1 - sma_0).
     IF x > 1 OR x < 0 {SET x TO 0.5.}
 
-    SET relInc TO -relInc.
     LOCAL inc_wait TO x * relInc.
 
     SET vMyNode TO c_Orb_Vel(0, PERIAPSIS, APOAPSIS, r_wait-BODY:RADIUS).
@@ -1807,35 +1864,51 @@ function p_Slow_Rendevouz {
 
     s_Log("Calculated wait maneuver").
 
-    SET manNode TO c_Circ_Man(timeToNode, LIST(vMyNode, 0), LIST(vAfterNode, 0), -(1-earlyIncChange) * inc_wait).
+    SET manNode TO c_Circ_Man(timeToNode, LIST(vMyNode, 0), LIST(vAfterNode, 0), (1 - targetIsLower) * inc_wait).
     p_Orb_Burn(manNode).
     s_Sub_Prog("p_Slow_Rendevouz").
 
+
+
+    s_Info_ref(LIST("Wait for",               "Phase Ang.",           "Final Ang."),
+               LIST(waitMyOrbNum + " orbits", tarDeltaNuAtNode + "°", targPosNew*360 + "°")).
+
     s_Log("Waiting").
+
+    LOCAL safeOrientation TO c_Safe_Orientation().
+    LOCK STEERING TO safeOrientation.
+    WAIT UNTIL VANG(FACING:STARVECTOR, safeOrientation:STARVECTOR) < 10.
+
     LOCAL didBurn TO 1.
     UNTIL waitMyOrbNum < 2 {
         IF didBurn {
-            a_Warp_To(OBT:PERIOD*0.95).
+            a_Warp_To(OBT:PERIOD*0.95, 0, 0).
         } ELSE {
-            a_Warp_To(OBT:PERIOD).
+            a_Warp_To(OBT:PERIOD, 0, 0).
         }
         SET waitMyOrbNum TO waitMyOrbNum - 1.
-        s_Info_ref("", waitMyOrbNum + " orbits").
 
-        SET timeToNode TO ETA:APOAPSIS + earlyIncChange * (ETA:PERIAPSIS - ETA:APOAPSIS).
+        SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+        SET timeToNode TO c_Time_from_Mean(m_clamp(c_Mean_An_from_Tru(myNuAtNode) - c_Mean_An_from_Tru(), 360)).
 
-        SET tarMeanAnAtNode TO c_MeanAN(targObt, timeToNode).
-        SET tarDeltAnAtNode TO m_Clamp(tarMeanAnAtNode + anomalyOffset - tarPhiOfNode, 360).
-        SET targPosStart TO tarDeltAnAtNode / 360.
+        SET tarMeanWhenAtNode TO c_Mean_An_from_Tru(targObt:TRUEANOMALY, targObt) + c_Mean_An_from_Time(timeToNode, targObt:PERIOD).
+        SET tarNuWhenAtNode TO c_Tru_An_from_Mean(tarMeanWhenAtNode, targObt).
+
+        // the phase angle at the orbit intersection
+        SET tarDeltaNuAtNode TO m_Clamp(tarNuWhenAtNode - tarNode[2] + anomalyOffset, 360).
+        SET targPosStart TO tarDeltaNuAtNode / 360.
 
         LOCAL minPosNew TO waitMyOrbNum * MIN(1, OBT:PERIOD / targObt:PERIOD)*0.95 + targPosStart.
         SET targPosNew TO FLOOR(minPosNew) + 1.
+
+        s_Info_ref(LIST("Wait for",               "Phase Ang.",           "Final Ang."),
+                    LIST(waitMyOrbNum + " orbits", tarDeltaNuAtNode + "°", targPosNew*360 + "°")).
 
         SET waitPeriod TO (targPosNew - targPosStart) * targObt:PERIOD.
         SET wait_orbit_period TO waitPeriod / waitMyOrbNum.
 
         SET sma_wait TO ((wait_orbit_period/(2*CONSTANT:PI))^2*BODY:MU)^(1/3).
-        SET r_wait TO BODY:RADIUS + APOAPSIS + earlyIncChange * (PERIAPSIS - APOAPSIS).
+        SET r_wait TO BODY:RADIUS + APOAPSIS + targetIsLower * (PERIAPSIS - APOAPSIS).
 
         SET ap_hohman TO MAX(r_wait, 2*sma_wait - r_wait).
         SET pe_hohman TO MIN(r_wait, 2*sma_wait - r_wait).
@@ -1851,12 +1924,19 @@ function p_Slow_Rendevouz {
             SET didBurn TO 0.
         }
     }
-    s_Info_pop().
-    a_Warp_To(OBT:PERIOD*0.75).
+    
+    SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+    SET timeToNode TO c_Time_from_Mean(m_clamp(c_Mean_An_from_Tru(myNuAtNode) - c_Mean_An_from_Tru(), 360)).
 
-    IF targ:TYPENAME = "Vessel" {
-        p_Match_Orbit(targ, 0.05, anomalyOffset).
-    }
+    LOCAL v_0 TO c_Orbit_Velocity_Vector(myNuAtNode).
+    LOCAL v_1 TO c_Orbit_Velocity_Vector(tarNode[2], targObt:SEMIMAJORAXIS, targObt:ECCENTRICITY, targObt:BODY:MU).
+
+    LOCAL burnNode TO c_Circ_Man(timeToNode, v_0, v_1, (1 - targetIsLower) * (relInc - inc_wait)).
+    p_Orb_Burn(burnNode).
+    s_Sub_Prog("p_Slow_Rendevouz").
+    s_Log("Orbit matched").
+
+    s_Info_pop().
 }
 
 function p_Direct_Rendevouz {
@@ -1931,15 +2011,15 @@ function p_Direct_Rendevouz {
         LOCAL t_trans TO TIME + d_t_trans.
 
         // Find the radius and true anomaly of the transfer point
-        LOCAL my_phi_trans TO m_Clamp(OBT:TRUEANOMALY + 360*d_t_trans/OBT:PERIOD, 360).
-        LOCAL my_r_trans TO c_r_from_Tru(my_phi_trans).
+        LOCAL my_Nu_trans TO m_Clamp(OBT:TRUEANOMALY + 360*d_t_trans/OBT:PERIOD, 360).
+        LOCAL my_r_trans TO c_r_from_Tru(my_Nu_trans).
         
         // Find the radius of the intercept point with the target
         LOCAL tar_r_trans TO c_r_from_Tru(m_Clamp(targObt:TRUEANOMALY + anomalyOffset + 360*d_t_trans/targObt:PERIOD + 180 - goal_phase_angle,360)
-                                        ,targObt:ECCENTRICITY, targObt:SEMIMAJORAXIS).
+                                        ,targObt).
 
         // Calculate my velocity change at the transfer point
-        LOCAL my_v_0_trans TO c_Orbit_Velocity_Vector(my_phi_trans).
+        LOCAL my_v_0_trans TO c_Orbit_Velocity_Vector(my_Nu_trans).
         LOCAL my_v_1_trans TO c_Orb_Vel(0,my_r_trans, tar_r_trans, my_r_trans, 0).
         LOCAL trans_node TO c_Circ_Man(d_t_trans, my_v_0_trans, LIST(my_v_1_trans, 0), 0).
         ADD trans_node.
@@ -1947,32 +2027,32 @@ function p_Direct_Rendevouz {
         // Calculate the height, true anomaly and eccentricity of the transfer orbit at the inclination change
         LOCAL r_inc_ch TO trans_node:ORBIT:SEMIMAJORAXIS.
         LOCAL ec_inc_ch TO trans_node:ORBIT:ECCENTRICITY.
-        LOCAL phi_inc_ch TO c_Tru_from_r(r_inc_ch, ec_inc_ch, r_inc_ch).
+        LOCAL Nu_inc_ch TO c_Tru_from_r(r_inc_ch, trans_node:ORBIT).
 
-        IF (dirOutwards = False AND phi_inc_ch < 180) OR (dirOutwards = True AND phi_inc_ch > 180) {
-            SET phi_inc_ch TO 360 - phi_inc_ch.
+        IF (dirOutwards = False AND Nu_inc_ch < 180) OR (dirOutwards = True AND Nu_inc_ch > 180) {
+            SET Nu_inc_ch TO 360 - Nu_inc_ch.
         }
-        LOCAL M_inc_ch TO c_Mean_An_from_Tru(phi_inc_ch, ec_inc_ch).
+        LOCAL M_inc_ch TO c_Mean_An_from_Tru(Nu_inc_ch, trans_node:ORBIT).
         IF (dirOutwards = False AND M_inc_ch < 180) OR (dirOutwards = True AND M_inc_ch > 180) {
             SET M_inc_ch TO 360 - M_inc_ch.
         }
 
         // Calculate the time of the inclination change
-        LOCAL d_t_inc_ch TO c_Time_from_Mean_An(m_Clamp(M_inc_ch, 180), trans_node:ORBIT:PERIOD).
+        LOCAL d_t_inc_ch TO c_Time_from_Mean(m_Clamp(M_inc_ch, 180), trans_node:ORBIT:PERIOD).
         SET d_t_inc_ch TO d_t_inc_ch + (t_trans - TIME):SECONDS.
         LOCAL t_inc_ch TO d_t_inc_ch + TIME.
 
         // Calculates the needed inclination change for a close encounter
-        LOCAL d_ang_encounter TO SIN(m_Clamp(myANDN["AN"][0] - my_phi_trans, 360))^2 * myANDN["relInc"].
-        LOCAL beta_inc_ch TO ARCTAN(TAN(d_ang_encounter)/SIN(180 - phi_inc_ch)).
-        IF m_Clamp(myANDN["AN"][0] - my_phi_trans, 360) < 180 {
+        LOCAL d_ang_encounter TO SIN(m_Clamp(myANDN["AN"][0] - my_Nu_trans, 360))^2 * myANDN["relInc"].
+        LOCAL beta_inc_ch TO ARCTAN(TAN(d_ang_encounter)/SIN(180 - Nu_inc_ch)).
+        IF m_Clamp(myANDN["AN"][0] - my_Nu_trans, 360) < 180 {
             SET beta_inc_ch TO -beta_inc_ch. 
         }
         IF dirOutwards = False {
             SET beta_inc_ch TO -beta_inc_ch. 
         }
 
-        LOCAL v_0_inc_ch TO c_Orbit_Velocity_Vector(phi_inc_ch, r_inc_ch, ec_inc_ch).
+        LOCAL v_0_inc_ch TO c_Orbit_Velocity_Vector(Nu_inc_ch, r_inc_ch, ec_inc_ch).
 
         LOCAL inc_node TO c_Circ_Man(d_t_inc_ch, v_0_inc_ch, v_0_inc_ch, -beta_inc_ch).
         ADD inc_node.
@@ -1987,8 +2067,8 @@ function p_Direct_Rendevouz {
                 SET minDist TO enc[0].
             }
         }
-        LOCAL d_phi TO m_Clamp(minEnc[4] - c_Equ_TruAn(minEnc[2],inc_node:ORBIT, targObt),90,-270).
-        SET d_t_offset TO d_t_offset + d_phi/-phase_angle_per_s.
+        LOCAL d_Nu TO m_Clamp(minEnc[4] - c_Equ_TruAn(minEnc[2],inc_node:ORBIT, targObt),90,-270).
+        SET d_t_offset TO d_t_offset + d_Nu/-phase_angle_per_s.
 
         IF i < iterations - 1 {
             REMOVE trans_node.
@@ -2005,7 +2085,7 @@ function p_Direct_Rendevouz {
 
 function p_Match_Orbit {
 // Matches orbital velocity at the closest approach
-    DECLARE Parameter targ TO 0, maxDist TO 0.05, anomalyOffset TO 0.
+    DECLARE Parameter targ TO 0, maxDist TO 0.02, anomalyOffset TO 0.
 
     IF (DEFINED layoutDone) = False 
     {
@@ -2054,7 +2134,7 @@ function p_Match_Orbit {
 
     LOCAL v_0 TO c_Orbit_Velocity_Vector(minEnc[2]).
     LOCAL v_1 TO c_Orbit_Velocity_Vector(minEnc[4], targObt:SEMIMAJORAXIS, targObt:ECCENTRICITY, targObt:BODY:MU).
-    LOCAL t_burn TO c_Time_from_Mean_An(m_Clamp(minEnc[1] - c_MeanAN(),360)).
+    LOCAL t_burn TO c_Time_from_Mean(m_Clamp(minEnc[1] - c_MeanAN(),360)).
 
     IF minDist < 200 {
         LOCAL vRel TO SQRT((v_0[0]-v_1[0])^2 + (v_0[1]-v_1[1])^2).
@@ -2394,24 +2474,24 @@ function p_Insertion {
     // Altitude of the first burn to adjust approach (Two minutes from now)
     LOCAL alt_0 TO ALTITUDE + BODY:RADIUS + VERTICALSPEED*120.
 
-    LOCAL phi_0 TO c_Tru_from_r(alt_0).
-    IF m_Clamp((360 - phi_0) - OBT:TRUEANOMALY, 360) < m_Clamp(phi_0 - OBT:TRUEANOMALY, 360) {
-        SET phi_0 TO 360 - phi_0.
+    LOCAL Nu_0 TO c_Tru_from_r(alt_0).
+    IF m_Clamp((360 - Nu_0) - OBT:TRUEANOMALY, 360) < m_Clamp(Nu_0 - OBT:TRUEANOMALY, 360) {
+        SET Nu_0 TO 360 - Nu_0.
     }
 
-    LOCAL vel_0 TO c_Orbit_Velocity_Vector(phi_0).
+    LOCAL vel_0 TO c_Orbit_Velocity_Vector(Nu_0).
 
     LOCAL d_t_adjustment_burn TO 0.
     IF OBT:ECCENTRICITY >= 1 {
-        SET d_t_adjustment_burn TO c_Time_from_Mean_An(c_Mean_An_from_Tru(phi_0) - c_MeanAN(), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
+        SET d_t_adjustment_burn TO c_Time_from_Mean(c_Mean_An_from_Tru(Nu_0) - c_MeanAN(), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
     } ELSE {
-        SET d_t_adjustment_burn TO c_Time_from_Mean_An(m_Clamp(c_Mean_An_from_Tru(phi_0) - c_MeanAN(), 360)).
+        SET d_t_adjustment_burn TO c_Time_from_Mean(m_Clamp(c_Mean_An_from_Tru(Nu_0) - c_MeanAN(), 360)).
     }
 
     LOCAL ecc_1 TO (ap_insertion - pe_insertion)/(ap_insertion + pe_insertion + 2*BODY:RADIUS).
     LOCAL sma_1 TO (ap_insertion + pe_insertion)/2 + BODY:RADIUS.
-    LOCAL phi_1 TO c_Tru_from_r(alt_0, ecc_1, sma_1).
-    LOCAL vel_1 TO c_Orbit_Velocity_Vector(phi_1, sma_1, ecc_1, BODY:MU).
+    LOCAL Nu_1 TO c_Tru_from_r(alt_0, False, ecc_1, sma_1).
+    LOCAL vel_1 TO c_Orbit_Velocity_Vector(Nu_1, sma_1, ecc_1, BODY:MU).
     IF vel_1[1] / vel_0[1] < 0 {
         SET vel_1[1] TO -vel_1[1].
     }
@@ -2420,7 +2500,7 @@ function p_Insertion {
 
     LOCAL inc_0 TO adjustment_nodes["relInc"].
     LOCAL argPe_0 TO OBT:ARGUMENTOFPERIAPSIS.
-    LOCAL inc_adjustment TO ARCTAN(SIN(inc_0)*COS(phi_0+argPe_0)/SQRT(SIN(phi_0+argPe_0)^2+COS(inc_0)^2*COS(phi_0+argPe_0)^2)).
+    LOCAL inc_adjustment TO ARCTAN(SIN(inc_0)*COS(Nu_0+argPe_0)/SQRT(SIN(Nu_0+argPe_0)^2+COS(inc_0)^2*COS(Nu_0+argPe_0)^2)).
     IF inc_0 > 90 {
         SET inc_adjustment TO 180 - inc_adjustment.
     }
@@ -2469,17 +2549,17 @@ function p_Insertion {
 
     LOCAL d_t_insertion_burn TO 0.
     IF OBT:ECCENTRICITY >= 1 {
-        SET d_t_insertion_burn TO c_Time_from_Mean_An(insertion_node[2] - c_MeanAN(), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
+        SET d_t_insertion_burn TO c_Time_from_Mean(insertion_node[2] - c_MeanAN(), 2*CONSTANT:PI*SQRT((-OBT:SEMIMAJORAXIS^3)/BODY:MU)).
     } ELSE {
-        SET d_t_insertion_burn TO c_Time_from_Mean_An(m_Clamp(insertion_node[2] - c_MeanAN(), 360)).
+        SET d_t_insertion_burn TO c_Time_from_Mean(m_Clamp(insertion_node[2] - c_MeanAN(), 360)).
     }
 
     LOCAL vel_2 TO c_Orbit_Velocity_Vector(insertion_node[0]).
 
     LOCAL ecc_3 TO (MAX(Ap, safeAlt) - pe_insertion)/(MAX(Ap, safeAlt) + pe_insertion + 2*BODY:RADIUS).
     LOCAL sma_3 TO (MAX(Ap, safeAlt) + pe_insertion + 2*BODY:RADIUS)/2.
-    LOCAL phi_3 TO c_Tru_from_r(insertion_node[3] + BODY:RADIUS, ecc_3, sma_3).
-    LOCAL vel_3 TO c_Orbit_Velocity_Vector(phi_3, sma_3, ecc_3, BODY:MU).
+    LOCAL Nu_3 TO c_Tru_from_r(insertion_node[3] + BODY:RADIUS, False, ecc_3, sma_3).
+    LOCAL vel_3 TO c_Orbit_Velocity_Vector(Nu_3, sma_3, ecc_3, BODY:MU).
 
     IF vel_2[1] / vel_3[1] < 0 {
         SET vel_3[1] TO -vel_3[1].
@@ -2496,7 +2576,7 @@ function p_Insertion {
     IF inc_nodes["DN"][3] > insertion_node[3] + 45 {
         SET insertion_node TO inc_nodes["DN"].
     }
-    LOCAL d_t_inclination_burn TO c_Time_from_Mean_An(m_Clamp(insertion_node[2] - c_MeanAN(), 360)).
+    LOCAL d_t_inclination_burn TO c_Time_from_Mean(m_Clamp(insertion_node[2] - c_MeanAN(), 360)).
 
     LOCAL vel_4 TO c_Orbit_Velocity_Vector(insertion_node[0]).
     LOCAL inclination_burn to c_Circ_Man(d_t_inclination_burn, vel_4, vel_4, -inc_insertion*3/4).
