@@ -907,16 +907,16 @@ function c_Simple_Man {
 
     LOCK THROTTLE TO 0.
 
-    LOCAL burnPoint TO APOAPSIS.
-    IF x1 <> 1 {
-        SET burnPoint TO PERIAPSIS.
+    LOCAL burnPoint TO PERIAPSIS.
+    IF x1 = 1 {
+        SET burnPoint TO APOAPSIS.
     }
 
     LOCAL vdiff TO c_Orb_Vel(0,x2,burnPoint,burnPoint) - c_Orb_Vel(0,0,0,burnPoint).
 
-    LOCAL esta TO ETA:APOAPSIS.
-    IF x1 <> 1 {
-        SET esta TO ETA:PERIAPSIS.
+    LOCAL esta TO ETA:PERIAPSIS.
+    IF x1 = 1 {
+        SET esta TO ETA:APOAPSIS.
     }
 
     LOCAL burnNode is Node(TIME:SECONDS+esta,0,0,vdiff).
@@ -1434,8 +1434,12 @@ function p_Orb_Burn {
     DECLARE Parameter manNode TO 0.
             //manNode:node	,the manouver node to execute.
 
+    LOCAL dvOffset TO 1.
+
     IF (DEFINED deltaVdone) = False {
-        RUNPATH("libraries/DeltaVLib").
+        CD("1:libraries").
+        RUNONCEPATH("DeltaVLib").
+        CD("1:").
     }
     IF (DEFINED layoutDone) = False {
         s_Layout().
@@ -1460,19 +1464,19 @@ function p_Orb_Burn {
     ADD manNode.
 
     s_Sub_Prog("p_Orb_Burn").
-    s_Info_push("deltaV:", round(manNode:DELTAV:MAG ,1) + " m/s").
-
-    LOCAL scale TO (manNode:DELTAV:MAG + 1)/manNode:DELTAV:MAG.
-
-    SET manNode:PROGRADE TO manNode:PROGRADE * scale.
-    SET manNode:RADIALOUT TO manNode:RADIALOUT * scale.
-    SET manNode:NORMAL TO manNode:NORMAL * scale.
+    s_Info_push("deltaV:", round(manNode:DELTAV:MAG ,2) + " m/s").
 
     LOCAL LOCK acc TO AVAILABLETHRUST/MASS.
     LOCAL LOCK safeacc TO MAX(acc, 0.001).
     SAS off.
 
     LOCAL burnMean TO calc_Burn_Mean(manNode:DELTAV:MAG)[0].
+
+    LOCAL scale TO (manNode:DELTAV:MAG + dvOffset)/manNode:DELTAV:MAG.
+
+    SET manNode:PROGRADE TO manNode:PROGRADE * scale.
+    SET manNode:RADIALOUT TO manNode:RADIALOUT * scale.
+    SET manNode:NORMAL TO manNode:NORMAL * scale.
 
     LOCK STEERING TO manNode:DELTAV.
     s_Status("turn to maneuver").
@@ -1486,12 +1490,12 @@ function p_Orb_Burn {
 
     // do the burn, THROTTLE down when below 30 m/s.
     LOCK STEERING TO manNode:deltav.
-    LOCK THROTTLE TO ((manNode:DELTAV:MAG/20)^2+0.02)*20/safeacc.
+    LOCK THROTTLE TO ((manNode:DELTAV:MAG/20)^2+0.01)*20/safeacc.
     s_Status("burning").
 
-    UNTIL manNode:DELTAV:MAG < 1{
+    UNTIL manNode:DELTAV:MAG < dvOffset{
         a_Stage().
-        s_Info_ref("", round(manNode:DELTAV:MAG - 1,1) + " m/s ").
+        s_Info_ref("", round(manNode:DELTAV:MAG - dvOffset,2) + " m/s ").
         WAIT 0.
     }
     UNLOCK STEERING.
@@ -1718,7 +1722,9 @@ function p_Launch_To_Rendevouz {
     LOCAL vRef TO c_Orb_Vel(0, 70000 - BODY:RADIUS, goalAlt, MAX(BODY:ATM:HEIGHT, 20000)).	            // calculating when to start the launch
 
     IF (DEFINED deltaVdone) = False {
-        RUNPATH("libraries/DeltaVLib").
+        CD("1:libraries").
+        RUNONCEPATH("DeltaVLib").
+        cd("1:").
     }
 
     LOCAL insertTime TO calc_Burn_Mean(vRef).
@@ -1837,86 +1843,71 @@ function p_Slow_Rendevouz {
     LOCAL targPosStart TO tarDeltaNuAtNode / 360.
     LOCAL waitMyOrbNum TO 0.
     LOCAL targPosNew TO 0.
+    LOCAL noExtendedOrbit TO 1.
 
-    // Just using the space between the orbits for waiting
-    UNTIL targPosNew OR waitMyOrbNum > 5
-    {
-        SET waitMyOrbNum TO waitMyOrbNum + 1.
-        LOCAL minPosNew TO waitMyOrbNum * MIN(1, OBT:PERIOD / targObt:PERIOD) + targPosStart.
-        LOCAL maxPosNew TO waitMyOrbNum * MAX(1, OBT:PERIOD / targObt:PERIOD) + targPosStart.
-        IF FLOOR(minPosNew) < FLOOR(maxPosNew){
-            SET targPosNew TO FLOOR(minPosNew) + 1.
+    // Searches for a viable waiting Orbit with a wait-time of 1 to 5 of your Orbits
+    FOR OrbNum IN RANGE(1,6) {
+        LOCAL lowPosNew TO OrbNum * MIN(1, OBT:PERIOD / targObt:PERIOD) + targPosStart.
+        LOCAL bigPosNew TO OrbNum * MAX(1, OBT:PERIOD / targObt:PERIOD) + targPosStart.
+        // This allows for the extension of the wait orbit if neccessary
+        LOCAL maxPosNew TO OrbNum * MAX(1, OBT:PERIOD / targObt:PERIOD)*1.2 + targPosStart. 
+
+        IF FLOOR(lowPosNew) < FLOOR(bigPosNew) {
+            SET waitMyOrbNum TO OrbNum.
+            SET targPosNew TO CEILING(lowPosNew).
+            SET noExtendedOrbit TO 1.
+            BREAK.
+        } ELSE IF FLOOR(lowPosNew) < FLOOR(maxPosNew) and noExtendedOrbit{
+            SET waitMyOrbNum TO OrbNum.
+            SET targPosNew TO CEILING(lowPosNew).
+            SET noExtendedOrbit TO 0.
         }
     }
 
-    // Allow raising the wait orbit outside both orbits to archive up to 1.25 orbits of waiting per orbit
-    IF waitMyOrbNum > 5 {
-        SET waitMyOrbNum TO 0.
-        SET targPosNew TO 0.
-        UNTIL targPosNew
-        {
-            SET waitMyOrbNum TO waitMyOrbNum + 1.
-            LOCAL minPosNew TO waitMyOrbNum * MIN(1, OBT:PERIOD / targObt:PERIOD) + targPosStart.
-            LOCAL maxPosNew TO waitMyOrbNum * MAX(1, OBT:PERIOD / targObt:PERIOD)*1.25 + targPosStart.
-            IF FLOOR(minPosNew) < FLOOR(maxPosNew){
-                SET targPosNew TO FLOOR(minPosNew) + 1.
-            }
-        }
-    }
+    s_Info_push(LIST("Wait for",               "At Target:",                        "Phase Ang."),
+                LIST(waitMyOrbNum + " orbits", targPosNew-targPosStart + " orbits", tarDeltaNuAtNode + "°")).
+
+
+    // Calculating the waiting orbit
 
     LOCAL waitPeriod TO (targPosNew - targPosStart) * targObt:PERIOD.
     LOCAL wait_orbit_period TO waitPeriod / waitMyOrbNum.
-
-    s_Info_push(LIST("Wait for",               "Phase Ang.",           "Final Ang."),
-                LIST(waitMyOrbNum + " orbits", tarDeltaNuAtNode + "°", targPosNew*360 + "°")).
-
-    // The Semi-Mayor-Axes of the starting Orbit, the waiting Orbit and the final Orbit
 
     LOCAL sma_0 TO OBT:SEMIMAJORAXIS.
     LOCAL sma_wait TO ((wait_orbit_period/(2*CONSTANT:PI))^2*BODY:MU)^(1/3).
     LOCAL sma_1 TO targObt:SEMIMAJORAXIS.
 
-    LOCAL r_wait TO BODY:RADIUS + tarNode[3].
+    SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+    LOCAL r_wait TO c_r_from_Tru(myNuAtNode) - BODY:RADIUS.
 
-    LOCAL ap_hohman TO MAX(r_wait, 2*sma_wait - r_wait).
-    LOCAL pe_hohman TO MIN(r_wait, 2*sma_wait - r_wait).
+    LOCAL ap_hohman TO MAX(r_wait, 2*(sma_wait - BODY:RADIUS) - r_wait).
+    LOCAL pe_hohman TO MIN(r_wait, 2*(sma_wait - BODY:RADIUS) - r_wait).
+
+    SET vMyNode TO c_Orb_Vel(0, PERIAPSIS, APOAPSIS, r_wait).
+    LOCAL vAfterNode TO c_Orb_Vel(0, pe_hohman, ap_hohman, r_wait).
 
     // we split the inclination change between the waiting maneuver and the final speedmatch
     // if the waiting maneuver goes most of the way it gets most of the inclination change and vice versa
     LOCAL x TO (sma_wait - sma_0) / (sma_1 - sma_0).
     IF x > 1 OR x < 0 {SET x TO 0.5.}
-
     LOCAL inc_wait TO x * relInc.
-
-    SET vMyNode TO c_Orb_Vel(0, PERIAPSIS, APOAPSIS, r_wait-BODY:RADIUS).
-    LOCAL vAfterNode TO c_Orb_Vel(0, pe_hohman, ap_hohman, r_wait, 0).
     
-
-    s_Log("Calculated wait maneuver").
+    s_Log("Started waiting maneuver").
 
     SET manNode TO c_Circ_Man(timeToNode, LIST(vMyNode, 0), LIST(vAfterNode, 0), (1 - targetIsLower) * inc_wait).
     p_Orb_Burn(manNode).
     s_Sub_Prog("p_Slow_Rendevouz").
 
-
-
-    s_Info_ref(LIST("Wait for",               "Phase Ang.",           "Final Ang."),
-               LIST(waitMyOrbNum + " orbits", tarDeltaNuAtNode + "°", targPosNew*360 + "°")).
-
-    s_Log("Waiting").
+    s_Status("Waiting").
 
     LOCAL safeOrientation TO c_Safe_Orientation().
     LOCK STEERING TO safeOrientation.
     WAIT UNTIL VANG(FACING:STARVECTOR, safeOrientation:STARVECTOR) < 10.
 
-    LOCAL didBurn TO 1.
-    UNTIL waitMyOrbNum < 2 {
-        IF didBurn {
-            a_Warp_To(OBT:PERIOD*0.95, 0, 0).
-        } ELSE {
-            a_Warp_To(OBT:PERIOD, 0, 0).
-        }
-        SET waitMyOrbNum TO waitMyOrbNum - 1.
+    // one correction before the final orbit
+    IF waitMyOrbNum >= 2 {
+        LOCAL orbitsToWarp TO waitMyOrbNum - 1.
+        a_Warp_To(OBT:PERIOD*orbitsToWarp - 20*60, 0, 0).
 
         // the phase angle at the orbit intersection
         SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
@@ -1924,31 +1915,35 @@ function p_Slow_Rendevouz {
         SET timeToNode TO phaseAngle[1].
 
         SET tarDeltaNuAtNode TO m_Clamp(phaseAngle[0] + anomalyOffset, 360).
+        SET targPosStart TO tarDeltaNuAtNode / 360.
 
-        LOCAL minPosNew TO waitMyOrbNum * MIN(1, OBT:PERIOD / targObt:PERIOD)*0.95 + targPosStart.
-        SET targPosNew TO FLOOR(minPosNew) + 1.
+        LOCAL lowPosNew TO MIN(1, OBT:PERIOD / targObt:PERIOD)*0.9 + targPosStart.
+        SET targPosNew TO CEILING(lowPosNew).
 
-        s_Info_ref(LIST("Wait for",               "Phase Ang.",           "Final Ang."),
-                    LIST(waitMyOrbNum + " orbits", tarDeltaNuAtNode + "°", targPosNew*360 + "°")).
+        s_Info_ref(LIST("Wait for",   "At Target:",                        "Phase Ang."),
+                   LIST(1 + " orbit", targPosNew-targPosStart + " orbits", tarDeltaNuAtNode + "°")).
 
         SET waitPeriod TO (targPosNew - targPosStart) * targObt:PERIOD.
-        SET wait_orbit_period TO waitPeriod / waitMyOrbNum.
+        SET wait_orbit_period TO waitPeriod.
 
         SET sma_wait TO ((wait_orbit_period/(2*CONSTANT:PI))^2*BODY:MU)^(1/3).
-        SET r_wait TO BODY:RADIUS + APOAPSIS + targetIsLower * (PERIAPSIS - APOAPSIS).
+        
+        SET myNuAtNode TO c_Equ_TruAn(tarNode[2], targObt, OBT).
+        SET r_wait TO c_r_from_Tru(myNuAtNode) - BODY:RADIUS.
 
-        SET ap_hohman TO MAX(r_wait, 2*sma_wait - r_wait).
-        SET pe_hohman TO MIN(r_wait, 2*sma_wait - r_wait).
+        SET ap_hohman TO MAX(r_wait, 2*(sma_wait - BODY:RADIUS) - r_wait).
+        SET pe_hohman TO MIN(r_wait, 2*(sma_wait - BODY:RADIUS) - r_wait).
 
-        SET vMyNode TO c_Orb_Vel(0, PERIAPSIS, APOAPSIS, r_wait-BODY:RADIUS).
-        SET vAfterNode TO c_Orb_Vel(0, pe_hohman, ap_hohman, r_wait, 0).
-        IF ABS(vMyNode - vAfterNode) > 1 OR waitMyOrbNum = 1 {
-            SET didBurn TO 1.
+        SET vMyNode TO c_Orb_Vel(0, PERIAPSIS, APOAPSIS, r_wait).
+        SET vAfterNode TO c_Orb_Vel(0, pe_hohman, ap_hohman, r_wait).
+
+        IF ABS(vMyNode - vAfterNode) > 0.01 {
+            s_Log("Performing final correction").
             SET manNode TO c_Circ_Man(timeToNode, LIST(vMyNode, 0), LIST(vAfterNode, 0), 0).
             p_Orb_Burn(manNode).
             s_Sub_Prog("p_Slow_Rendevouz").
         } ELSE {
-            SET didBurn TO 0.
+            a_Warp_To(OBT:PERIOD).
         }
     }
     
@@ -2435,7 +2430,9 @@ function p_Dock {
     }
 
     IF (DEFINED DockLibDone) = False {
-        RUNPATH("libraries/DockLib").
+        CD("1:libraries").
+        RUNONCEPATH("DockLib").
+        cd("1:").
     }
     s_Log("Starting docking procedure").
     s_Status("Translating to dock.").
@@ -2549,14 +2546,15 @@ function p_Insertion {
         SET inc_insertion TO -inc_insertion.
     }
 
+    // If the current body has a moon, you want to be below it.
     LOCAL bods TO 0.
-    LIST BODIES IN bods.
     LOCAL safeAlt TO BODY:SOIRADIUS - BODY:RADIUS.
-    FOR Bod in bods {
-        IF Bod:HASBODY AND Bod:BODY = BODY {
-            SET safeAlt TO MIN(safeAlt, Bod:ALTITUDE - Bod:SOIRADIUS).
-        }
+
+    LOCAL BodChilds TO BODY:ORBITINGCHILDREN.
+    FOR Bod IN BodChilds {
+        SET safeAlt TO MIN(safeAlt, BOD:ALTITUDE - BOD:SOIRADIUS).
     }
+    
     SET safeAlt TO safeAlt/2.
 
     IF insertion_node[3] < -BODY:RADIUS OR insertion_node[3] > pe_insertion * 5 {
