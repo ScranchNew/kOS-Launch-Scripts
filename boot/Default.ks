@@ -74,10 +74,14 @@ IF RT OR SHIP:STATUS = "PRELAUNCH"
         SET fName TO fName:substring(0, fName:find("ks") - 1).
         CD("0:/launch").
         COMPILE (fName + ".ks").
-        COPYPATH(fName + ".ksm", "1:/").
+        IF EXISTS("1:/launch"){
+            DELETEPATH("1:/launch").
+        }
+        CREATEDIR("1:/launch").
+        COPYPATH(fName + ".ksm", "1:/launch/").
         DELETEPATH(fName + ".ksm").
         CD("1:/").
-        RUNPATH(fName).
+        RUNPATH("1:/launch/" + fName).
     }
 } ELSE {
     PRINT "ERROR: No Connection".
