@@ -18,6 +18,12 @@ IF ADDONS:RT:AVAILABLE {
 
 IF RT OR SHIP:STATUS = "PRELAUNCH"
 {
+    // Compile ks file (so the ksm version can be run as bootloader).
+    CD("0:/boot").
+    COMPILE("Default.ks").
+    COPYPATH("0:/boot/Default.ksm", "1:/boot/").
+    PRINT "Compiled Bootloader".
+
     // Copy the libraries
     copyLibs().
 
@@ -44,13 +50,13 @@ IF RT OR SHIP:STATUS = "PRELAUNCH"
             // Gets your input
             UNTIL retPress
             {
-                LOCAL char TO Terminal:Input:GetChar().
-                if char <> Terminal:Input:Return
+                LOCAL nxtchar TO Terminal:Input:GetChar().
+                IF nxtchar <> Terminal:Input:Return
                 {
-                    if char = Terminal:Input:Backspace {
+                    IF nxtchar = Terminal:Input:Backspace {
                         SET inputstring TO inputstring:substring(0,inputstring:length - 1).
                     } ELSE {
-                        SET inputstring TO inputstring + char.
+                        SET inputstring TO inputstring + nxtchar.
                     }
                     Print inputstring:padright(20):substring(0,20) AT (21, 0).
                 } ELSE {
@@ -73,13 +79,19 @@ IF RT OR SHIP:STATUS = "PRELAUNCH"
         LOCAL fName TO filelist[fileNum]:tostring.
         SET fName TO fName:substring(0, fName:find("ks") - 1).
         CD("0:/launch").
-        COMPILE (fName + ".ks").
+        IF compiler {
+            COMPILE (fName + ".ks").
+        }
         IF EXISTS("1:/launch"){
             DELETEPATH("1:/launch").
         }
         CREATEDIR("1:/launch").
-        COPYPATH(fName + ".ksm", "1:/launch/").
-        DELETEPATH(fName + ".ksm").
+        IF compiler {
+            COPYPATH(fName + ".ksm", "1:/launch/").
+            DELETEPATH(fName + ".ksm").
+        } ELSE {
+            COPYPATH(fName + ".ks", "1:/launch/").
+        }
         CD("1:/").
         RUNPATH("1:/launch/" + fName).
     }
@@ -88,8 +100,15 @@ IF RT OR SHIP:STATUS = "PRELAUNCH"
 }
 
 function copyLibs{
-// Compiles and copies libraries from "Archive/libraries" to "1:/libraries"
-// It is important that you keep your libraries in an uncompiled form or else this script might fuck up
+// Compiles and copies libraries from "Archive/libraries" to "1:/libraries"PR
+// It is important that you keep your libraries in an uncompiled form or ELSE this script might fuck up
+
+// Libs: {filename: [isCompiled, .ks-file, .ksm-file]}
+
+    LOCAL minspace TO 1500.
+
+    LOCAL proc TO list().
+    LIST PROCESSORS in proc.
 
     CD("0:/libraries").
     LOCAL libs TO lexicon().
@@ -108,6 +127,7 @@ function copyLibs{
                 // SET isCompiled TO True.
             } ELSE {
                 SET fname TO kFile:tostring:REMOVE(fname-3,3).
+                PRINT "Found file:" + fname.
             }
             IF libs:haskey(fname) = False {
                 SET libs[fname] TO list(False, "", "").
@@ -124,28 +144,47 @@ function copyLibs{
     IF EXISTS("1:/libraries"){
         DELETEPATH("1:/libraries").
     }
+    IF EXISTS("1:/launch"){
+        DELETEPATH("1:/1:/launch").
+    }
+    LOCAL procspace TO proc[0]:volume:freespace.
     CREATEDIR("1:/libraries").
     FOR name in libs:KEYS
     {
+        LOCAL fname TO "".
+        LOCAL del TO False.
         IF compiler {
             IF libs[name][0] = False {
                 COMPILE libs[name][1].
                 SET libs[name][0] TO True.
                 SET libs[name][2] TO name + ".ksm".
-                COPYPATH(libs[name][2], "1:/libraries/").
-                DELETEPATH(libs[name][2]).
+                SET fname TO libs[name][2].
+                SET del TO True.
             } ELSE {
-                COPYPATH(libs[name][2], "1:/libraries/").
+                SET fname TO libs[name][2].
             }
         } ELSE {
-            IF libs[name][0] {
-                COPYPATH(libs[name][1], "1:/libraries/").
-            }
+            SET fname TO libs[name][1].
+        }
+        LOCAL fsize TO open(fname):size.
+
+        IF procspace - fsize > minspace {
+            SET procspace TO procspace - fsize.
+            COPYPATH(fname, "1:/libraries/").
+            PRINT "Copied file:" + fname.
+            IF del {DELETEPATH(fname).}
+        } ELSE {
+            IF del {DELETEPATH(fname).}
+            PRINT "Ran out of space at: " + fname.
+            BREAK.
         }
     }
+    
+    PRINT("Finished loading libraries").
     CD("0:/").
     COMPILE("runF.ks").
     COPYPATH("runF","1:/").
     DELETEPATH("runF.ksm").
     CD("1:/").
+    PRINT("Loaded runf").
 }

@@ -8,7 +8,7 @@
 
 @LAZYGLOBAL OFF.
 
-GLOBAL DockLibDone TO True.
+GLOBAL DockLib_Loaded TO True.
 
 function vproj
 {
@@ -24,10 +24,10 @@ function getSignedMag
 	parameter baseVect.
 
 	local vangle is vang(vect, baseVect).
-	if ( vangle > 90 and vangle < 270 )
+	IF ( vangle > 90 and vangle < 270 )
 	{
 		return vect:mag.
-	} else {
+	} ELSE {
 		return -vect:mag.
 	}
 }
@@ -42,7 +42,7 @@ function dock_with_port {
     // a_max: the maximum amount the RCS thrusters are allowed to fire
 
     clearvecdraws().
-    if verbose {clearscreen.}
+    IF verbose {clearscreen.}
 
     //PID loop controlling the translation of the vessel
     //Tweaking the PID : 
@@ -89,13 +89,13 @@ function dock_with_port {
 
     // If a docking port is given as argument it will be targeted
 
-    if trgt = 0 and HASTARGET {
+    IF trgt = 0 and HASTARGET {
         SET trgt TO TARGET.
-    } else {
+    } ELSE {
         SET TARGET TO trgt.
     }
 
-    if HASTARGET and target:targetable
+    IF HASTARGET and target:targetable
     {
         LOCAL tShip TO trgt:ship.
 
@@ -217,7 +217,7 @@ function dock_with_port {
             set ship:control:starboard  to  PID_v_z:update(time:seconds, targetVel_z).
 
             //Draw some fancy vectors
-            if visual
+            IF visual
             {
                 clearvecdraws().
                 LOCAL vdt TO VECDRAW(trgt:position, (trgt:portfacing:forevector) * 1.5, yellow, "Trgt", 1, true, 0.05).
@@ -237,7 +237,7 @@ function dock_with_port {
             }
 
             //Print stuff for debugging or if you like cool numbers
-            if verbose {
+            IF verbose {
                 print "Dist.    : " + round(refPos:X, 3) + " m      " at (0, terminal:height - 9).
                 print "Right    : " + round(refPos:Y, 3) + " m      " at (0, terminal:height - 8).
                 print "Up       : " + round(refPos:Z, 3) + " m      " at (0, terminal:height - 7).

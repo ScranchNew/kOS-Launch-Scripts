@@ -21,5 +21,5 @@ Then it exits the script in a safe state by calling the Quit() function.
 
 The "runF.ks" script allows to run any library function from the **kOS** console, a feature which is still missing from kOS.
 
-For example you can execute `run runf("p_orb_burn").` to run the `p_orb_burn()` function from "LaunchLib.ks" and execute the next maneouver node.
+For example you can execute `run runf("p_orb_burn").` to run the `p_orb_burn()` function from "2_LaunchLib.ks" and execute the next maneouver node.
 

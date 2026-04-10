@@ -1,18 +1,19 @@
 // The most basic script to launch into an orbit
 @LAZYGLOBAL OFF.
 
-LOCAL Ap TO 1500 * 1000. // The desired apoapsis in [m].
+LOCAL Ap TO 100 * 1000. // The desired apoapsis in [m].
 LOCAL Pe TO Ap.         // The desired periapsis
-LOCAL Inc TO 30.         // The orbital inclination in [°]
+LOCAL Inc TO 0.         // The orbital inclination in [°]
 
 
 IF ship:status = "PRELAUNCH"
 {
-    // These are used to load the necessary libraries if not already loaded from "boot/default.ks"
+    // These are used to load the necessary libraries IF not already loaded from "boot/default.ks"
     cd("1:libraries").
-    runoncepath("../libraries/LaunchLib").
-    runoncepath("../libraries/DeltaVLib").
-    runoncepath("../libraries/DockLib").
+    runoncepath("../libraries/0_LogLib").
+    runoncepath("../libraries/1_DeltaVLib").
+    runoncepath("../libraries/2_LaunchLib").
+    runoncepath("../libraries/3_DockLib").
     cd("1:").
 
     // Set the mission name

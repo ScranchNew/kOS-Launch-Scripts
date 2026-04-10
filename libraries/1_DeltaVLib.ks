@@ -1,8 +1,10 @@
 @LAZYGLOBAL OFF.
 
+GLOBAL DeltaVLib_Loaded TO True.
+
 function parseDeltaV {
 // Parses the whole craft for engines, fuel, mass, etc. and calculates deltaV per stage
-// Does not work if you mix different fuel types being burned in one stage
+// Does not work IF you mix different fuel types being burned in one stage
 
     DECLARE Parameter pressure TO 0.
             // pressure used for the ISP, thrust, etc. Default is vacuum(0).
@@ -134,7 +136,7 @@ function calc_Burn_Mean {
             SET deltV TO 0.
         }
         
-        IF deltV >= dv - wholeDV        // if the current stage has more than enough deltaV, you only calculate for the part you need
+        IF deltV >= dv - wholeDV        // IF the current stage has more than enough deltaV, you only calculate for the part you need
         {
             SET deltV TO dv - wholeDV.
         }
